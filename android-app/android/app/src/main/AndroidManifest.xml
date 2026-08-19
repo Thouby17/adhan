@@ -24,6 +24,14 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
 
+    <!-- « Utiliser ma position » (réglages) : la WebView demande la
+         permission à la volée, mais SEULEMENT si elle est déclarée ici.
+         Sans ces lignes, le refus est automatique et silencieux — c'est
+         exactement le « User denied Geolocation » constaté sur la tablette,
+         alors qu'aucune question n'avait été posée à l'utilisateur. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- Le service qui maintient l'app vivante et joue le son. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

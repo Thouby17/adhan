@@ -750,3 +750,62 @@ input:focus-visible, select:focus-visible {
 }
 #maj-later { background: rgba(0,0,0,.12); color: #1b1b1f; }
 #maj-go    { background: #1b1b1f; color: #fff; }
+
+/* ---------- Liste des barres (recherche + historique) -------------------
+   Entrée en cascade : but = éviter l'apparition brutale d'un bloc après les
+   6 s de recherche. 240 ms, décalage 40 ms par ligne, transform/opacity
+   seulement. `backwards` et non `both` : une fois l'entrée finie, l'animation
+   ne doit plus tenir le transform, sinon elle écraserait le retour tactile
+   du toucher (:active). */
+#barres-liste { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.barre-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-2, rgba(255,255,255,.04));
+  border: 1px solid transparent;
+  transition: border-color var(--fast) var(--ease),
+              transform var(--fast) var(--ease);
+  animation: barre-in var(--mid) var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+.barre-item:active { transform: scale(0.97); }
+.barre-item.selected { border-color: var(--accent, #f0b429); }
+.barre-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.barre-txt strong { font-size: .92rem; }
+.barre-txt span { font-size: .78rem; color: var(--muted, #78809a); }
+.barre-badge {
+  flex: none; font-size: .7rem; font-weight: 700;
+  padding: 3px 8px; border-radius: 99px;
+  background: var(--surface-3, rgba(255,255,255,.08));
+  color: var(--muted, #78809a);
+}
+@keyframes barre-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* ---------- Retour tactile des boutons d'action -------------------------
+   120 ms (--fast) : la fourchette du retour de pression. Pas de :hover ici —
+   l'appareil cible est une tablette, le survol n'y existe pas. */
+.set-actions button { transition: transform var(--fast) var(--ease), opacity var(--fast) var(--ease); }
+.set-actions button:active { transform: scale(0.97); }
+
+/* ---------- Bannière de mise à jour : glissement, pas d'apparition sèche.
+   Transition et non keyframes : elle peut se rouvrir juste après « Plus
+   tard », et une transition repart de la position COURANTE au lieu de
+   rejouer depuis zéro. Sortie par le même chemin que l'entrée. */
+#maj-banner {
+  transition: transform var(--mid) var(--ease),
+              opacity var(--mid) var(--ease),
+              visibility 0s linear 0s;
+}
+#maj-banner.hidden {
+  /* Reprend le dessus sur le .hidden global (display:none), qui rendrait
+     toute transition impossible. */
+  display: flex;
+  transform: translateY(16px); opacity: 0;
+  visibility: hidden; pointer-events: none;
+  transition: transform var(--mid) var(--ease),
+              opacity var(--mid) var(--ease),
+              visibility 0s linear var(--mid);
+}
+#maj-banner button:active { transform: scale(0.97); }

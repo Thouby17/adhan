@@ -878,6 +878,7 @@
     dom.setOutput.value = cfg.audioOutput || "local";
     dom.setCastHost.value = cfg.castHost || "";
     majLigneBarre();
+    renderBarres([]);
     const on = cfg.prayersWithAdhan || [];
     dom.setPrayers.querySelectorAll("input").forEach(i => { i.checked = on.indexOf(i.value) !== -1; });
     dom.setStore.textContent = (store === "service")
@@ -963,8 +964,18 @@
       showErrors(null); updatePreview();
     }, function (err) {
       dom.btnLocate.textContent = "Utiliser ma position";
-      showErrors({ position: "Position indisponible (" + err.message +
-        "). Le navigateur l'interdit hors https ; saisir les coordonnées à la main." });
+      // Le bon conseil dépend d'OÙ on est : sur la tablette, la cause est
+      // la permission Android ; dans un navigateur, c'est le https.
+      if (natif()) {
+        showErrors({ position: "Android a refusé l'accès à la position. "
+          + "Si aucune question ne t'a été posée : Réglages Android → Applications → "
+          + "Adhan → Autorisations → Position → « Autoriser », puis réessaie. "
+          + "Pour une tablette fixée au mur, saisir les coordonnées une bonne fois "
+          + "à la main marche tout aussi bien — elles ne changeront jamais." });
+      } else {
+        showErrors({ position: "Position indisponible (" + err.message +
+          "). Le navigateur l'interdit hors https ; saisir les coordonnées à la main." });
+      }
     }, { timeout: 10000, maximumAge: 0 });
   }
 
@@ -1131,6 +1142,56 @@
     if (act) act.classList.toggle("hidden", !utile);
   }
 
+  // Historique des appareils utilisés — donnée locale, comme le suivi des
+  // prières : elle décrit CETTE tablette, pas la configuration de l'app.
+  const BARRES_KEY = "adhan.barres.v1";
+  function lireBarres() {
+    try { return JSON.parse(localStorage.getItem(BARRES_KEY)) || []; } catch (e) { return []; }
+  }
+  function majHistoriqueBarre(ip, nom) {
+    if (!ip) return;
+    const ancien = lireBarres().find(b => b.ip === ip);
+    let l = lireBarres().filter(b => b.ip !== ip);
+    l.unshift({ ip: ip, nom: nom || (ancien ? ancien.nom : ""), vuLe: Date.now() });
+    try { localStorage.setItem(BARRES_KEY, JSON.stringify(l.slice(0, 5))); } catch (e) {}
+  }
+
+  // La liste mêle le RÉSULTAT de la recherche (en tête) et l'historique :
+  // au premier affichage des réglages, on montre déjà les appareils connus —
+  // pas besoin de relancer 6 secondes de recherche pour retrouver sa barre.
+  function renderBarres(trouves) {
+    const ul = document.getElementById("barres-liste");
+    if (!ul) return;
+    const histo = lireBarres();
+    const items = [];
+    (trouves || []).forEach(t => items.push({
+      ip: t.ip, nom: t.nom, enLigne: true, connue: histo.some(x => x.ip === t.ip) }));
+    histo.forEach(x => {
+      if (!items.some(i => i.ip === x.ip))
+        items.push({ ip: x.ip, nom: x.nom, enLigne: false, connue: true });
+    });
+    ul.textContent = "";
+    ul.classList.toggle("hidden", !items.length);
+    const choisi = dom.setCastHost ? dom.setCastHost.value.trim() : "";
+    items.forEach(function (b, i) {
+      const li = el("li", "barre-item" + (b.ip === choisi ? " selected" : ""));
+      li.style.setProperty("--i", i);
+      const txt = el("div", "barre-txt");
+      txt.appendChild(el("strong", null, b.nom || "Appareil Cast"));
+      txt.appendChild(el("span", null, b.ip + (b.enLigne ? "" : " — vue précédemment")));
+      li.appendChild(txt);
+      if (b.connue) li.appendChild(el("span", "barre-badge", "utilisée"));
+      li.addEventListener("click", function () {
+        dom.setCastHost.value = b.ip;
+        majHistoriqueBarre(b.ip, b.nom);
+        ul.querySelectorAll(".selected").forEach(x => x.classList.remove("selected"));
+        li.classList.add("selected");
+        etatBarre("Barre choisie : " + (b.nom || b.ip) + ". Enregistre, puis envoie un adhan d'essai.", true);
+      });
+      ul.appendChild(li);
+    });
+  }
+
   function etatBarre(txt, ok) {
     const el = document.getElementById("cast-etat");
     if (!el) return;
@@ -1152,14 +1213,12 @@
       etatBarre("Recherche en cours sur le réseau… (6 secondes)");
       N.chercherBarres().then(function (r) {
         const l = (r && r.appareils) || [];
+        renderBarres(l);
         if (!l.length) {
-          etatBarre("Aucun appareil trouvé. Vérifiez que la tablette et la barre "
+          etatBarre("Aucun appareil trouvé. Vérifie que la tablette et la barre "
                   + "sont sur le MÊME réseau Wi-Fi — c'est la cause la plus fréquente.", false);
         } else {
-          dom.setCastHost.value = l[0].ip;
-          etatBarre(l.length + " appareil(s) trouvé(s). Retenu : "
-                  + (l[0].nom || "sans nom") + " (" + l[0].ip + "). "
-                  + "Enregistrez, puis envoyez un adhan d'essai.", true);
+          etatBarre(l.length + " appareil(s) trouvé(s) — touche celui à utiliser.", true);
         }
       }).catch(e => etatBarre("Recherche impossible : " + e.message, false))
         .then(() => { chercher.disabled = false; });
@@ -1174,9 +1233,10 @@
       N.testerBarre(hote).then(function (r) {
         // ⚠️ « Aucune erreur » ne prouve pas qu'on a entendu quelque chose :
         // c'est exactement le piège qui a coûté une soirée de diagnostic.
+        if (r && r.ok) { majHistoriqueBarre(hote); renderBarres([]); }
         etatBarre(r && r.ok
-          ? "La barre a téléchargé le fichier et l'a joué. Si vous n'avez rien "
-            + "entendu, montez son volume : le reste de la chaîne est prouvé."
+          ? "La barre a téléchargé le fichier et l'a joué. Si tu n'as rien "
+            + "entendu, monte son volume : le reste de la chaîne est prouvé."
           : "Échec : " + ((r && r.detail) || "la barre n'a pas répondu"), !!(r && r.ok));
       }).catch(e => etatBarre("Essai impossible : " + e.message, false))
         .then(() => { tester.disabled = false; });
