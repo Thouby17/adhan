@@ -114,7 +114,7 @@
     // la barre annonçait « PLAYING », téléchargeait bien le fichier, et on
     // n'entendait rien. Panne totalement silencieuse.
     // Mettre null pour ne jamais toucher au volume de la barre.
-    castMinVolume: 0.5,
+    castMinVolume: 0.15,
 
     // Sortie ALSA du haut-parleur local (null = sortie par défaut du Pi).
     alsaDevice: null,

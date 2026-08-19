@@ -886,6 +886,10 @@
       : "Réglages enregistrés dans cet appareil.";
     showErrors(null);
     updatePreview();
+    // EN DERNIER, une fois TOUS les champs remplis : appele plus tot, il
+    // comparait les cases des prieres encore a leur etat HTML par defaut,
+    // et s allumait a l ouverture sans qu aucun reglage n ait change.
+    majBoutonEnregistrer();
   }
 
   function readForm() {
@@ -926,6 +930,23 @@
     } catch (e) { dom.setPreview.textContent = "Aperçu indisponible : " + e.message; }
   }
 
+  // Le bouton Enregistrer ne s'allume que s'il y a VRAIMENT quelque chose à
+  // sauver. On ne se contente pas de « un champ a bougé » : modifier puis
+  // remettre la valeur d'origine doit l'éteindre — sinon il ment.
+  function formEstModifie() {
+    if (!dom.setPlace) return false;
+    const v = S.validate(readForm());
+    if (Object.keys(v.errors).length) return true;   // touché, et à corriger
+    for (const k in v.values) {
+      if (JSON.stringify(v.values[k]) !== JSON.stringify(cfg[k])) return true;
+    }
+    return false;
+  }
+  function majBoutonEnregistrer() {
+    const b = document.getElementById("btn-set-save");
+    if (b) b.classList.toggle("a-sauver", formEstModifie());
+  }
+
   function saveSettings() {
     const v = S.validate(readForm());
     if (!v.ok) { showErrors(v.errors); return; }
@@ -938,6 +959,7 @@
       }
       applyOverrides(next);
       refreshDailyCache();
+      majBoutonEnregistrer();
       log("Réglages enregistrés (" + store + ")");
       showView("today");
     });
@@ -961,7 +983,7 @@
       dom.setLat.value = pos.coords.latitude.toFixed(4);
       dom.setLng.value = pos.coords.longitude.toFixed(4);
       dom.btnLocate.textContent = "Utiliser ma position";
-      showErrors(null); updatePreview();
+      showErrors(null); updatePreview(); majBoutonEnregistrer();
     }, function (err) {
       dom.btnLocate.textContent = "Utiliser ma position";
       // Le bon conseil dépend d'OÙ on est : sur la tablette, la cause est
@@ -1050,6 +1072,14 @@
     dom.btnLocate.addEventListener("click", locate);
     ["set-lat", "set-lng", "set-fajr-angle", "set-isha-angle", "set-asr", "set-highlats", "set-reminder"]
       .forEach(id => { g(id).addEventListener("input", updatePreview); g(id).addEventListener("change", updatePreview); });
+
+    // Par DÉLÉGATION sur l'onglet entier : un seul branchement couvre tous
+    // les champs, y compris ceux qui seront ajoutés plus tard.
+    const vueReglages = document.getElementById("view-settings");
+    if (vueReglages) {
+      vueReglages.addEventListener("input", majBoutonEnregistrer);
+      vueReglages.addEventListener("change", majBoutonEnregistrer);
+    }
 
     document.addEventListener("keydown", function (e) {
       if (e.keyCode !== 27 && e.keyCode !== 461) return;
@@ -1187,6 +1217,7 @@
         ul.querySelectorAll(".selected").forEach(x => x.classList.remove("selected"));
         li.classList.add("selected");
         etatBarre("Barre choisie : " + (b.nom || b.ip) + ". Enregistre, puis envoie un adhan d'essai.", true);
+        majBoutonEnregistrer();
       });
       ul.appendChild(li);
     });

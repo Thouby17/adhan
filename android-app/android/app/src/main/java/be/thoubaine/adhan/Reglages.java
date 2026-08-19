@@ -63,6 +63,6 @@ final class Reglages {
 
     /** Volume plancher, ou -1 pour « ne jamais y toucher ». */
     static double plancher(Context ctx) {
-        return p(ctx).getFloat("plancher", 0.5f);
+        return p(ctx).getFloat("plancher", 0.15f);
     }
 }

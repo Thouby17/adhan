@@ -809,3 +809,26 @@ input:focus-visible, select:focus-visible {
               visibility 0s linear var(--mid);
 }
 #maj-banner button:active { transform: scale(0.97); }
+
+/* ---------- Enregistrer : discret au repos, ambre quand ça compte --------
+   Le bouton était accentué EN PERMANENCE : il criait tout le temps, donc il
+   ne disait rien. Au repos il se fait neutre ; dès qu'un réglage diffère de
+   ce qui est enregistré, il prend l'ambre — et le perd si on remet la valeur
+   d'origine. background-color en toutes lettres, jamais le raccourci
+   `background` : le transitionner a déjà empêché une valeur finale de
+   s'appliquer (bug vécu dans ce projet). */
+#btn-set-save {
+  background: transparent;
+  border-color: var(--text-3);
+  color: var(--text-2);
+  transition: background-color var(--fast) linear,
+              border-color var(--fast) linear,
+              color var(--fast) linear,
+              transform var(--fast) var(--ease);
+}
+#btn-set-save:active { transform: scale(0.97); }
+#btn-set-save.a-sauver {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--ground);
+}
