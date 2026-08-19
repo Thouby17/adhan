@@ -1,6 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- ==================================================================
+         PERMISSIONS — chacune sert un maillon précis de la chaîne « sonner
+         à 5 h du matin sans que personne n'y pense ». Aucune n'est là par
+         confort : si l'une manque, l'adhan est raté en silence.
+         ================================================================== -->
+
+    <!-- Le serveur local qui présente le MP3 à la barre de son (Cast). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Cast cherche la barre par mDNS : il lui faut le trafic multicast. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- ⭐ USE_EXACT_ALARM (Android 13+) est réservé aux applications dont la
+         RAISON D'ÊTRE est de sonner à une heure précise — réveils, agendas.
+         C'est exactement ce qu'est cette app. Contrairement à
+         SCHEDULE_EXACT_ALARM, elle est accordée d'office : aucun écran de
+         réglage à traverser, et l'utilisateur ne peut pas la retirer par
+         mégarde en faisant le ménage dans ses permissions. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Android 12 ne connaît pas encore la précédente. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
+    <!-- Le service qui maintient l'app vivante et joue le son. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Rallumer l'écran à l'heure de la prière. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Réarmer les alarmes après une coupure de courant : un appareil mural
+         redémarre sans que personne n'ouvre l'application. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Demander à sortir de l'optimisation de batterie. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -15,6 +53,8 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:exported="true">
 
             <intent-filter>
@@ -23,6 +63,29 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Reçoit l'alarme. Non exporté : personne d'autre ne doit pouvoir
+             déclencher un adhan. -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <!-- Réarme tout après un redémarrage. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".AdhanService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -34,8 +97,4 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
     </application>
-
-    <!-- Permissions -->
-
-    <uses-permission android:name="android.permission.INTERNET" />
 </manifest>

@@ -174,6 +174,31 @@
             </div>
           </fieldset>
 
+          <!-- Visible uniquement dans l'APK Android : c'est app.js qui retire
+               la classe « hidden » quand le pont natif répond. -->
+          <fieldset class="set-group hidden" id="set-android">
+            <legend>Fiabilité du réveil</legend>
+            <p class="set-help">
+              Pour sonner la nuit, écran éteint, l'application a besoin de
+              trois autorisations d'Android. Si l'une manque, l'adhan est
+              raté <strong>sans aucun message</strong> — d'où ce tableau de
+              bord.
+            </p>
+            <ul class="diag" id="diag-list">
+              <li data-cle="alarmesExactes"><span class="diag-p"></span>
+                <span class="diag-t">Alarmes à l'heure exacte</span>
+                <button type="button" class="diag-b hidden" data-action="alarmes">Autoriser</button></li>
+              <li data-cle="notifications"><span class="diag-p"></span>
+                <span class="diag-t">Notification de veille</span>
+                <button type="button" class="diag-b hidden" data-action="notifs">Autoriser</button></li>
+              <li data-cle="horsOptimisationBatterie"><span class="diag-p"></span>
+                <span class="diag-t">Hors optimisation de batterie</span>
+                <button type="button" class="diag-b hidden" data-action="batterie">Autoriser</button></li>
+              <li data-cle="alarmesArmees"><span class="diag-p"></span>
+                <span class="diag-t" id="diag-armees">Alarmes programmées</span></li>
+            </ul>
+          </fieldset>
+
           <fieldset class="set-group">
             <legend>Volume minimum de la barre</legend>
             <p class="set-help">
@@ -359,6 +384,7 @@
   <script src="config.js"></script>
   <script src="praytimes.js"></script>
   <script src="settings.js"></script>
+  <script src="native.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

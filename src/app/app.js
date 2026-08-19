@@ -23,6 +23,9 @@
   const DEFAULTS = window.ADHAN_CONFIG;
   const S = window.AdhanSettings;
   const PrayTimes = window.PrayTimes;
+  const N = window.AdhanNative;
+  // Vrai UNIQUEMENT dans l'APK Android. Ailleurs, l'app garde ses minuteurs.
+  const natif = () => !!(N && N.dispo());
 
   let cfg = DEFAULTS;
   let PT_OPTS = S.ptOptions(cfg);
@@ -133,7 +136,18 @@
     if (state.view === "month") renderMonth();
     if (state.view === "qibla") renderQibla();
     updateNightMode();
+    programmerNatif();
     log("Horaires recalculés pour " + key);
+  }
+
+  // ⭐ On rearme SEPT JOURS a chaque recalcul, sans se demander si c'est
+  // necessaire. Reprogrammer une alarme identique ne coute rien ; en oublier
+  // une coute une priere manquee, sans le moindre signe a l'ecran.
+  function programmerNatif() {
+    if (!natif()) return;
+    N.programmer(timesFor, cfg.prayersWithAdhan, 7)
+      .then(r => log("Alarmes Android : " + r.armees + " armées sur " + r.envoyees + " envoyées"))
+      .catch(e => log("⚠ Programmation Android impossible : " + e.message));
   }
 
   const findNext = () => state.schedule.find(e => e.at > new Date()) || null;
@@ -723,8 +737,11 @@
     for (const e of state.schedule) {
       if (cfg.prayersWithAdhan.indexOf(e.prayer) === -1) continue;
 
+      // Sur Android, c'est l'alarme systeme qui declenche — elle fonctionne
+      // ecran eteint, ce dont ce minuteur est incapable. Le laisser actif en
+      // plus ferait sonner deux fois.
       const late = now - e.at;
-      if (late >= 0 && late < win && !state.fired[e.id]) {
+      if (!natif() && late >= 0 && late < win && !state.fired[e.id]) {
         state.fired[e.id] = true;
         log("Déclenchement depuis l'écran : " + e.prayer);
         switchToAlarm(e.prayer, true);
@@ -771,12 +788,22 @@
     else { startTimers(); keepScreenOn(); }
   });
 
-  function switchToAlarm(prayer, screenTriggered) {
+  // dejaJoue : le service Android a DEJA lancé le son et nous prévient. Le
+  // rejouer ici superposerait deux adhans décalés d'une seconde.
+  function switchToAlarm(prayer, screenTriggered, dejaJoue) {
     fromScreen = !!screenTriggered;
     stopTimers();
     dom.alarm.classList.remove("hidden");
     dom.alarmName.textContent = LABELS[prayer] || prayer;
     dom.alarmTime.textContent = hm(new Date());
+
+    if (natif()) {
+      if (!dejaJoue) N.jouer(prayer).catch(e => log("Lecture Android impossible : " + e.message));
+      if (alarmTimeout) clearTimeout(alarmTimeout);
+      alarmTimeout = setTimeout(closeAlarm, cfg.alarmAutoCloseSeconds * 1000);
+      dom.alarmStop.focus();
+      return;
+    }
 
     const a = dom.alarmAudio;
     if (loadedSrc !== cfg.adhanFile) { a.src = cfg.adhanFile; loadedSrc = cfg.adhanFile; }
@@ -793,6 +820,7 @@
 
   function closeAlarm() {
     if (alarmTimeout) { clearTimeout(alarmTimeout); alarmTimeout = null; }
+    if (natif()) { N.arreter().catch(() => {}); }
     try { dom.alarmAudio.pause(); dom.alarmAudio.currentTime = 0; } catch (e) {}
     dom.alarm.classList.add("hidden");
     // On relance TOUJOURS les timers avant de tenter de fermer l'app : si la
@@ -1017,6 +1045,7 @@
           cfg.latitude + "/" + cfg.longitude + " · " +
           PT_OPTS.fajrAngle + "°/" + PT_OPTS.ishaAngle + "° · " + PT_OPTS.highLats);
       refreshDailyCache();
+      brancherNatif();
       if (params.mode === "alarm" && params.prayer) {
         switchToAlarm(params.prayer, false);
       } else {
@@ -1025,6 +1054,81 @@
         keepScreenOn();
       }
     });
+  }
+
+  // ---------- Android : écouter le service ------------------------------
+  function brancherNatif() {
+    if (!natif()) return;
+
+    // Le service prévient quand il déclenche. Il joue DÉJÀ le son à ce
+    // moment-là : l'écran ne fait que suivre.
+    N.ecouter("adhan", function (ev) {
+      if (!ev) return;
+      if (ev.actif) switchToAlarm(ev.priere || "", false, true);
+      else if (!dom.alarm.classList.contains("hidden")) closeAlarm();
+    });
+
+    // ⚠️ Cas réel et non théorique : l'alarme se déclenche alors qu'aucune
+    // page n'est chargée. Android ouvre l'application, la page démarre — et
+    // l'annonce ci-dessus est déjà passée, faute de destinataire. On demande
+    // donc l'état au chargement plutôt que d'attendre un message perdu.
+    N.enCours()
+      .then(r => { if (r && r.actif) switchToAlarm(r.priere || "", false, true); })
+      .catch(() => {});
+
+    // Sans notification autorisée, Android refuse le service au premier plan,
+    // et l'app cesse d'exister dès l'écran éteint.
+    N.demanderNotifications().catch(() => {});
+    N.demarrerVeille().catch(() => {});
+
+    const bloc = document.getElementById("set-android");
+    if (bloc) bloc.classList.remove("hidden");
+
+    document.querySelectorAll("#diag-list .diag-b").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const quoi = b.getAttribute("data-action");
+        const p = quoi === "notifs"   ? N.demanderNotifications()
+                : quoi === "batterie" ? N.demanderExemptionBatterie()
+                :                       N.ouvrirReglagesAlarmes();
+        // L'utilisateur part dans les réglages d'Android et revient : on
+        // rafraîchit au retour, pas tout de suite — à cet instant précis
+        // rien n'a encore changé.
+        p.catch(e => log("⚠ " + e.message));
+      });
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) rafraichirDiagnostic();
+    });
+    rafraichirDiagnostic();
+  }
+
+  function rafraichirDiagnostic() {
+    if (!natif()) return;
+    N.etat().then(function (e) {
+      const etats = {
+        alarmesExactes: e.alarmesExactes,
+        notifications: e.notifications === "granted",
+        horsOptimisationBatterie: e.horsOptimisationBatterie,
+        alarmesArmees: e.alarmesArmees > 0
+      };
+      document.querySelectorAll("#diag-list li").forEach(function (li) {
+        const ok = !!etats[li.getAttribute("data-cle")];
+        li.classList.toggle("ok", ok);
+        li.classList.toggle("ko", !ok);
+        const b = li.querySelector(".diag-b");
+        if (b) b.classList.toggle("hidden", ok);
+      });
+      const armees = document.getElementById("diag-armees");
+      if (armees) {
+        armees.textContent = e.alarmesArmees > 0
+          ? e.alarmesArmees + " alarme(s) programmée(s)" +
+            (e.prochaineAlarme ? " — prochaine à " + hm(new Date(e.prochaineAlarme)) : "")
+          : "Aucune alarme programmée";
+      }
+      log("Android " + e.versionAndroid + " · " + e.alarmesArmees + " alarme(s)" +
+          " · exactes:" + (e.alarmesExactes ? "oui" : "NON") +
+          " · batterie:" + (e.horsOptimisationBatterie ? "oui" : "NON"));
+    }).catch(() => {});
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

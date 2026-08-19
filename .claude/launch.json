@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "adhan-ui",
+      "name": "adhan",
       "runtimeExecutable": "node",
       "runtimeArgs": ["tools/serve.js"],
       "port": 8080

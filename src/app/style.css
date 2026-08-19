@@ -693,3 +693,27 @@ input:focus-visible, select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Tableau de bord Android (onglet Réglages) -------------------
+   Trois autorisations dont l'absence est INVISIBLE à l'usage : l'app a l'air
+   de fonctionner et ne sonne simplement jamais. La pastille rend l'état
+   lisible d'un coup d'œil, sans avoir à comprendre Android. */
+.diag { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.diag li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--surface-2, rgba(255,255,255,.04));
+}
+.diag-p {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--muted, #78809a); flex: none;
+}
+.diag li.ok    .diag-p { background: var(--ok, #35c26b); }
+.diag li.ko    .diag-p { background: var(--warn, #e8a33d); }
+.diag-t { flex: 1; font-size: .95rem; }
+.diag li.ko .diag-t { font-weight: 600; }
+.diag-b {
+  flex: none; border: 0; cursor: pointer;
+  padding: 7px 12px; border-radius: 8px; font-size: .85rem; font-weight: 600;
+  background: var(--accent, #f0b429); color: #1b1b1f;
+}

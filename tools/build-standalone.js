@@ -59,6 +59,9 @@ ${read("praytimes.js")}
 ${read("settings.js")}
 </script>
 <script>
+${read("native.js")}
+</script>
+<script>
 ${read("app.js")}
 </script>`;
 
