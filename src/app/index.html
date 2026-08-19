@@ -199,6 +199,8 @@
             </ul>
             <div class="set-actions">
               <button type="button" id="btn-test-reveil">Tester le réveil dans 2 minutes</button>
+              <button type="button" id="btn-verif-maj">Vérifier les mises à jour</button>
+              <button type="button" id="btn-verif-maj">Vérifier les mises à jour</button>
             </div>
             <p class="set-help" id="reveil-etat">
               Le seul test qui prouve vraiment quelque chose : posez la
@@ -342,6 +344,18 @@
 
     <!-- Barre d'onglets en bas : c'est la zone du pouce. Quatre entrées,
          libellées — une icône seule se devine mal. -->
+    <!-- Banniere de mise a jour : n apparait que dans l APK, quand une
+         version plus recente est publiee. « Plus tard » la ferme ; elle ne
+         reviendra qu au prochain demarrage. -->
+    <div id="maj-banner" class="hidden" role="status">
+      <div class="maj-txt">
+        <strong>Mise à jour disponible</strong>
+        <span id="maj-version"></span>
+      </div>
+      <button type="button" id="maj-later">Plus tard</button>
+      <button type="button" id="maj-go">Installer</button>
+    </div>
+
     <nav id="tabbar" class="tabbar">
       <button class="tab is-active" data-view="today">
         <span class="tab-ico" data-ico="today" aria-hidden="true"></span>

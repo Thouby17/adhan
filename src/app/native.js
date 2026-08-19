@@ -117,6 +117,8 @@
     chercherBarres: function () { return appel("chercherBarres"); },
     testerBarre: function (hote) { return appel("testerBarre", { hote: hote || "" }); },
     testerReveil: function (min) { return appel("testerReveil", { minutes: min || 2 }); },
+    verifierMiseAJour: function () { return appel("verifierMiseAJour"); },
+    installerMiseAJour: function (url) { return appel("installerMiseAJour", { url: url }); },
     ecouter: ecouter
   };
 })(typeof self !== "undefined" ? self : this);

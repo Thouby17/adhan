@@ -1114,6 +1114,7 @@
       if (!document.hidden) rafraichirDiagnostic();
     });
     brancherTestReveil();
+    brancherMaj();
     rafraichirDiagnostic();
   }
 
@@ -1206,6 +1207,88 @@
       }).catch(e => { etat.textContent = "Impossible : " + e.message; })
         .then(() => { b.disabled = false; });
     });
+  }
+
+  // ---------- Mises à jour ----------------------------------------------
+  // Même mécanique que les apps restaurant : contrôle au démarrage, dialogue
+  // non bloquant. Leur leçon est reprise : le contrôle est RE-tenté à chaque
+  // retour au premier plan (borné à une fois par heure), jamais « une fois
+  // par processus » — le service garde le processus vivant en permanence, et
+  // « une fois par processus » signifierait « une seule fois pour toujours ».
+  let majDerniereVerif = 0;
+  let majInfo = null;
+
+  function verifierMaj(manuel) {
+    if (!natif()) return;
+    const maintenant = Date.now();
+    if (!manuel && maintenant - majDerniereVerif < 3600 * 1000) return;
+    majDerniereVerif = maintenant;
+
+    const etat = document.getElementById("reveil-etat");
+    if (manuel && etat) etat.textContent = "Vérification en cours…";
+
+    N.verifierMiseAJour().then(function (r) {
+      if (!r || !r.ok) {
+        // ⚠️ L échec du contrôle ne doit JAMAIS être silencieux : c est ce
+        // silence qui a laissé des tablettes sur une vieille version pendant
+        // des semaines chez un restaurant.
+        log("⚠ Contrôle de mise à jour impossible : " + ((r && r.raison) || "?"));
+        if (manuel && etat) etat.textContent =
+          "Contrôle impossible : " + ((r && r.raison) || "réseau ?");
+        return;
+      }
+      if (!r.plusRecente) {
+        log("À jour (v" + r.actuelle + ")");
+        if (manuel && etat) etat.textContent =
+          "L application est à jour (version " + r.actuelle + ").";
+        return;
+      }
+      majInfo = r;
+      const v = document.getElementById("maj-version");
+      if (v) v.textContent = "v" + r.actuelle + " → v" + r.derniere +
+        " (" + Math.round((r.taille || 0) / 1024) + " Ko)";
+      document.getElementById("maj-banner").classList.remove("hidden");
+      if (manuel && etat) etat.textContent = "Version " + r.derniere + " disponible — voir en bas de l écran.";
+    }).catch(e => log("⚠ Contrôle de mise à jour : " + e.message));
+  }
+
+  function brancherMaj() {
+    const banner = document.getElementById("maj-banner");
+    const go = document.getElementById("maj-go");
+    const later = document.getElementById("maj-later");
+    const verif = document.getElementById("btn-verif-maj");
+    if (!banner) return;
+
+    later.addEventListener("click", () => banner.classList.add("hidden"));
+    go.addEventListener("click", function () {
+      if (!majInfo) return;
+      go.disabled = true; go.textContent = "Téléchargement…";
+      N.installerMiseAJour(majInfo.url).then(function (r) {
+        go.disabled = false; go.textContent = "Installer";
+        if (r && r.ok) {
+          // L installateur d Android est ouvert : c est lui qui prend la main.
+          banner.classList.add("hidden");
+        } else if (r && r.autorisationRequise) {
+          const v = document.getElementById("maj-version");
+          if (v) v.textContent = "Autorise l installation dans l écran ouvert, puis reviens appuyer sur Installer.";
+        } else {
+          const v = document.getElementById("maj-version");
+          if (v) v.textContent = "Échec : " + ((r && r.raison) || "réessayer plus tard");
+        }
+      }).catch(function (e) {
+        go.disabled = false; go.textContent = "Installer";
+        log("⚠ Mise à jour : " + e.message);
+      });
+    });
+
+    if (verif) verif.addEventListener("click", () => verifierMaj(true));
+
+    // Au retour au premier plan : la tablette au mur ne redémarre jamais,
+    // c est le seul moment où re-vérifier a un sens (borné à 1/heure).
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) verifierMaj(false);
+    });
+    verifierMaj(false);
   }
 
   function rafraichirDiagnostic() {

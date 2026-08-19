@@ -36,6 +36,11 @@
          redémarre sans que personne n'ouvre l'application. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Proposer l'installation des mises à jour téléchargées depuis GitHub.
+         Android affiche TOUJOURS son écran de confirmation : l'application ne
+         peut pas se remplacer en silence, elle peut seulement le proposer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Demander à sortir de l'optimisation de batterie. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 

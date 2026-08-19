@@ -238,6 +238,47 @@ public class AdhanPlugin extends Plugin {
     }
 
     // -----------------------------------------------------------------
+    // Mises a jour — meme mecanique que les apps restaurant (UpdateChecker),
+    // adaptee : la source est GitHub Releases, et l'ECHEC du controle est
+    // remonte a l'interface au lieu d'etre silencieux (le silence a laisse
+    // les tablettes d'un restaurant sur une vieille version pendant des
+    // semaines sans que personne ne le voie).
+    // -----------------------------------------------------------------
+    @PluginMethod
+    public void verifierMiseAJour(final PluginCall call) {
+        final Context ctx = getContext().getApplicationContext();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    call.resolve(JSObject.fromJSONObject(UpdateChecker.verifier(ctx)));
+                } catch (Exception e) {
+                    call.reject("Contrôle impossible : " + e.getMessage());
+                }
+            }
+        }, "adhan-maj-verif").start();
+    }
+
+    @PluginMethod
+    public void installerMiseAJour(final PluginCall call) {
+        final String url = call.getString("url", "");
+        if (url == null || url.length() == 0) {
+            call.reject("Aucune adresse de téléchargement.");
+            return;
+        }
+        final Context ctx = getContext().getApplicationContext();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    call.resolve(JSObject.fromJSONObject(
+                        UpdateChecker.telechargerEtInstaller(ctx, url)));
+                } catch (Exception e) {
+                    call.reject("Installation impossible : " + e.getMessage());
+                }
+            }
+        }, "adhan-maj-install").start();
+    }
+
+    // -----------------------------------------------------------------
     // Permissions
     // -----------------------------------------------------------------
     @PluginMethod
