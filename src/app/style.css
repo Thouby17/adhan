@@ -1,0 +1,695 @@
+/* ===================================================================
+   Adhan — application mobile
+   Personnalité : nocturne, calme, précis. Un instrument, pas une affiche.
+
+   Trois partis pris :
+   1. La PROCHAINE PRIÈRE est la vedette — c'est la question qu'on ouvre
+      l'app pour poser. L'heure courante, on l'a partout ailleurs.
+   2. Navigation par onglets EN BAS : c'est la zone du pouce.
+   3. Les actions restent près de leur objet : la cloche de chaque prière
+      est sur sa ligne, pas enfouie dans les réglages.
+   =================================================================== */
+
+:root {
+  /* --- Couleurs (HSL, gris teintés indigo — ni noir ni blanc purs) */
+  --ground:      hsl(226, 32%,  7%);
+  --surface:     hsl(226, 26%, 12%);
+  --surface-up:  hsl(226, 24%, 17%);
+  --line:        hsl(226, 20%, 21%);
+  --text:        hsl(220, 25%, 94%);   /* 16,5:1 */
+  --text-2:      hsl(222, 14%, 66%);   /*  7,6:1 */
+  --text-3:      hsl(224, 15%, 58%);   /*  5,7:1 — petit texte, seuil 4,5:1 */
+  --accent:      hsl(38,  88%, 64%);   /* ambre — la lueur d'horizon */
+  --accent-soft: hsl(38,  40%, 22%);
+  --danger:      hsl(6,   62%, 52%);
+
+  /* --- Typographie : valeurs rondes, pas de ratio modulaire */
+  --t-hero:  clamp(38px, 12vw, 60px);
+  --t-count: clamp(30px, 9.5vw, 46px);
+  --t-h2:    17px;
+  --t-body:  15px;
+  --t-time:  19px;
+  --t-label: 11px;
+  --t-micro: 12px;
+
+  /* --- Espacement : multiples de 4, écarts >= 25 % */
+  --s1: 4px;  --s2: 8px;  --s3: 12px;
+  --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+
+  /* --- Mouvement : 2 durées, 1 courbe. Rien de plus. */
+  --fast: 120ms;                              /* retour tactile */
+  --mid:  240ms;                              /* changement d'écran */
+  --ease: cubic-bezier(0.05, 0.7, 0.1, 1);    /* entrée : décélère */
+
+  --tabbar-h: 62px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  height: 100dvh;
+  background: var(--ground);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--t-body);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;   /* les chiffres ne tressautent pas */
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+#app { height: 100%; display: flex; flex-direction: column; }
+
+/* Veilleuse : entre Isha et Fajr, l'écran s'assombrit. */
+#app { transition: opacity 1200ms linear; }
+#app.is-night { opacity: 0.74; }
+
+/* ---------------------------------------------------------------- VUES */
+#views {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--s5);
+}
+
+.view {
+  max-width: 560px;          /* colonne de lecture, même sur grand écran */
+  margin: 0 auto;
+  padding: 0 var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.view.hidden { display: none; }
+
+/* Fade through : les onglets n'ont pas de relation spatiale entre eux,
+   c'est la transition qui convient (et la plus discrète). */
+@keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.view:not(.hidden) { animation: view-in var(--mid) var(--ease) both; }
+
+/* ------------------------------------------------------------- BANDEAU */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s5) 0 var(--s2);
+}
+
+.topbar-title { font-size: 24px; font-weight: 300; letter-spacing: -0.01em; }
+
+.topbar-place {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--t-micro); font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-2);
+}
+.pin {
+  width: 9px; height: 9px; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+.topbar-dates { text-align: right; line-height: 1.35; }
+#date-hijri { font-size: var(--t-micro); color: var(--accent); font-weight: 600; }
+#date-greg  { font-size: var(--t-micro); color: var(--text-3); }
+
+/* --------------------------------------------------------------- HÉROS */
+.hero {
+  background: linear-gradient(180deg, var(--surface-up), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s5) var(--s4) var(--s4);
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s1);
+}
+
+.hero-label {
+  font-size: var(--t-label); font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--text-3);
+}
+.hero h1 {
+  font-size: var(--t-hero); font-weight: 200;
+  line-height: 1; letter-spacing: -0.03em;
+}
+.hero-at { font-size: var(--t-time); color: var(--text-2); font-weight: 300; }
+.hero-count {
+  font-size: var(--t-count); font-weight: 300; line-height: 1.1;
+  color: var(--accent); margin-top: var(--s2);
+}
+
+.progress {
+  width: 100%; height: 5px; margin-top: var(--s4);
+  background: var(--ground);
+  border-radius: 99px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; width: 0;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 1s linear;
+}
+.progress-ends {
+  width: 100%;
+  display: flex; justify-content: space-between;
+  font-size: var(--t-micro); color: var(--text-3);
+  margin-top: 6px;
+}
+
+/* ------------------------------------------------------- LIGNES PRIÈRES */
+.rows { list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
+
+.row {
+  display: flex; align-items: center; gap: var(--s3);
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  min-height: 60px;
+}
+.row-name {
+  flex: 1;
+  font-size: var(--t-body); font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.row-time {
+  font-size: var(--t-time); font-weight: 300;
+  color: var(--text); letter-spacing: 0.01em;
+}
+.row.is-passed { opacity: 0.45; }
+.row.is-next {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.row.is-next .row-name, .row.is-next .row-time { color: var(--accent); }
+
+/* La cloche : cible de 44 px, sur la ligne, à portée de pouce. */
+.bell {
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  background: transparent; border: 0; cursor: pointer;
+  border-radius: 50%;
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.bell:active { transform: scale(0.9); }
+.bell-ico {
+  width: 20px; height: 20px;
+  background: var(--text-3);
+  -webkit-mask: var(--ico-bell-off) center / contain no-repeat;
+          mask: var(--ico-bell-off) center / contain no-repeat;
+}
+.bell[aria-pressed="true"] .bell-ico {
+  background: var(--accent);
+  -webkit-mask-image: var(--ico-bell-on);
+          mask-image: var(--ico-bell-on);
+}
+.bell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ------------------------------------------------------------- PANNEAUX */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s4);
+  display: flex; flex-direction: column; gap: var(--s2);
+}
+.panel-title { font-size: var(--t-h2); font-weight: 600; letter-spacing: -0.01em; }
+.panel-help { font-size: var(--t-micro); line-height: 1.55; color: var(--text-3); }
+.panel-help.center { text-align: center; max-width: 34ch; margin: 0 auto; }
+
+/* --------------------------------------------------- COURSE DU SOLEIL */
+#sky { width: 100%; aspect-ratio: 1000 / 300; margin-top: var(--s1); }
+#sky svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.sky-night   { fill: hsl(226, 45%, 4%); }
+.sky-fill    { fill: hsl(38, 60%, 60%); opacity: 0.10; }
+.sky-curve   { fill: none; stroke: var(--accent); stroke-width: 3; opacity: 0.9; }
+.sky-horizon { stroke: var(--text-3); stroke-width: 1.5; }
+.sky-thresh  { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 8 8; opacity: 0.5; }
+.sky-now     { stroke: var(--text-2); stroke-width: 1; opacity: 0.3; }
+.sky-dot     { fill: var(--surface); stroke: var(--accent); stroke-width: 4; }
+.sky-dot.is-passed { stroke: var(--text-3); }
+.sky-sun     { fill: var(--accent); }
+.sky-label {
+  font-family: inherit; font-size: 26px; font-weight: 600;
+  letter-spacing: 0.05em; text-anchor: middle; fill: var(--text-2);
+}
+.sky-label.is-passed { fill: var(--text-3); opacity: 0.6; }
+
+/* ---------------------------------------------------------------- QIBLA */
+.qibla-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s3); padding: var(--s5) 0 var(--s3);
+}
+.qibla-dial {
+  width: min(72vw, 300px); aspect-ratio: 1;
+  position: relative;
+}
+.qibla-dial svg { width: 100%; height: 100%; display: block; }
+.qd-ring   { fill: var(--surface); stroke: var(--line); stroke-width: 2; }
+.qd-tick   { stroke: var(--text-3); stroke-width: 2; }
+.qd-card   { font-family: inherit; font-size: 15px; font-weight: 700; fill: var(--text-3); text-anchor: middle; }
+.qd-card.n { fill: var(--text-2); }
+.qd-needle { fill: var(--accent); }
+.qd-tail   { fill: var(--line); }
+.qd-hub    { fill: var(--ground); stroke: var(--accent); stroke-width: 3; }
+/* Le cadran tourne avec la boussole — transform seul, donc fluide. */
+#qibla-rotor { transition: transform var(--mid) var(--ease); transform-origin: 50% 50%; }
+
+.qibla-deg  { font-size: 34px; font-weight: 200; letter-spacing: -0.02em; }
+.qibla-hint { font-size: var(--t-micro); color: var(--text-3); text-align: center; max-width: 30ch; }
+
+/* ----------------------------------------------------------------- MOIS */
+.month-bar { align-items: center; }
+.month-label {
+  flex: 1; text-align: center;
+  font-size: var(--t-h2); font-weight: 600;
+  text-transform: capitalize;
+}
+.btn-icon {
+  width: 44px; height: 44px; flex: 0 0 auto;
+  display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 50%; color: var(--text-2);
+  font-size: 22px; line-height: 1; cursor: pointer;
+  transition: transform var(--fast) var(--ease);
+}
+.btn-icon:active { transform: scale(0.92); }
+
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+.month-table { width: 100%; border-collapse: collapse; font-size: var(--t-micro); }
+.month-table th {
+  position: sticky; top: 0;
+  background: var(--surface-up);
+  font-size: var(--t-label); font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-3);
+  padding: var(--s3) var(--s2); text-align: right; white-space: nowrap;
+}
+.month-table th:first-child { text-align: left; }
+.month-table td {
+  padding: var(--s3) var(--s2);
+  border-top: 1px solid var(--line);
+  text-align: right;                 /* les chiffres s'alignent à droite */
+  color: var(--text-2); white-space: nowrap;
+}
+.month-table td:first-child { text-align: left; color: var(--text-3); font-weight: 600; }
+.month-table tr.is-today td { background: var(--accent-soft); color: var(--accent); }
+.month-table tr.is-today td:first-child { color: var(--accent); }
+
+/* ------------------------------------------------------------- BOUTONS */
+.btn {
+  font-family: inherit; font-size: var(--t-body); font-weight: 600;
+  min-height: 48px; padding: 0 var(--s5);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: transform var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+.btn:active { transform: scale(0.97); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.btn-primary { background: var(--accent); border: 1px solid var(--accent); color: var(--ground); }
+.btn-ghost   { background: transparent; border: 1px solid var(--text-3); color: var(--text-2); }
+.btn-quiet   { background: transparent; border: 1px solid transparent; color: var(--text-3); padding: 0 var(--s3); }
+.btn-big     { min-height: 60px; font-size: 17px; padding: 0 var(--s7); }
+
+.tail { display: flex; justify-content: center; padding-bottom: var(--s3); }
+
+/* ---------------------------------------------------------- BARRE D'ONGLETS */
+.tabbar {
+  flex: 0 0 auto;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.tab {
+  background: none; border: 0; cursor: pointer;
+  min-height: var(--tabbar-h);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px;
+  color: var(--text-3);
+  transition: color var(--fast) var(--ease);
+}
+.tab-ico {
+  width: 22px; height: 22px;
+  background: currentColor;
+  -webkit-mask: center / contain no-repeat;
+          mask: center / contain no-repeat;
+  transition: transform var(--fast) var(--ease);
+}
+.tab-txt { font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; }
+.tab.is-active { color: var(--accent); }
+.tab.is-active .tab-ico { transform: translateY(-1px) scale(1.06); }
+.tab:active .tab-ico { transform: scale(0.9); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+/* Icônes en masque SVG : nettes à toute taille, prennent la couleur du texte,
+   et embarquées dans la page (aucune requête réseau). */
+:root {
+  --ico-today:    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"/></svg>');
+  --ico-qibla:    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z" fill="black"/></svg>');
+  --ico-month:    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>');
+  --ico-track:    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h6M4 12h6M4 17.5h6"/><path d="M14.5 5.6l1.9 1.9 3.6-3.6"/><path d="M14.5 11.1l1.9 1.9 3.6-3.6"/><path d="M14.5 16.6l1.9 1.9 3.6-3.6"/></svg>');
+  --ico-settings: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="2.2" fill="white"/><circle cx="15" cy="12" r="2.2" fill="white"/><circle cx="9" cy="17" r="2.2" fill="white"/></svg>');
+  --ico-bell-on:  url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10.2 19a2 2 0 003.6 0"/></svg>');
+  --ico-bell-off: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0110.5-4M18 12c0 4 2 5 2 5H7"/><path d="M10.2 19a2 2 0 003.6 0"/><path d="M3 3l18 18"/></svg>');
+}
+.tab-ico[data-ico="today"]    { -webkit-mask-image: var(--ico-today);    mask-image: var(--ico-today); }
+.tab-ico[data-ico="qibla"]    { -webkit-mask-image: var(--ico-qibla);    mask-image: var(--ico-qibla); }
+.tab-ico[data-ico="track"]    { -webkit-mask-image: var(--ico-track);    mask-image: var(--ico-track); }
+.tab-ico[data-ico="month"]    { -webkit-mask-image: var(--ico-month);    mask-image: var(--ico-month); }
+.tab-ico[data-ico="settings"] { -webkit-mask-image: var(--ico-settings); mask-image: var(--ico-settings); }
+
+/* ---------------------------------------------------------------- SUIVI */
+/* Marquer une prière est le geste le plus fréquent de cet écran : cible
+   large, retour immédiat, et rien à confirmer (c'est réversible d'un tap). */
+.track-today { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s1); }
+
+.track-item {
+  display: flex; align-items: center; gap: var(--s3);
+  min-height: 56px; padding: 0 var(--s3);
+  background: var(--ground);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-family: inherit; font-size: var(--t-body); font-weight: 600;
+  cursor: pointer; text-align: left;
+  transition: transform var(--fast) var(--ease);
+}
+.track-item:active { transform: scale(0.98); }
+.track-item .tick {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  border: 2px solid var(--text-3); border-radius: 50%;
+  display: grid; place-items: center;
+}
+.track-item .tick::after {
+  content: "✓"; font-size: 15px; font-weight: 700; line-height: 1;
+  color: var(--ground); opacity: 0; transform: scale(0.5);
+  transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.track-item .when { margin-left: auto; font-weight: 300; color: var(--text-3); }
+
+.track-item.is-done { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.track-item.is-done .tick { background: var(--accent); border-color: var(--accent); }
+.track-item.is-done .tick::after { opacity: 1; transform: none; }
+.track-item.is-done .when { color: var(--accent); opacity: 0.8; }
+/* Passée sans avoir été marquée : signalée, mais sans dramatiser. */
+.track-item.is-missed { border-color: hsl(6, 40%, 34%); }
+.track-item.is-future { opacity: 0.5; }
+.track-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Grille 30 jours : une colonne par jour, une ligne par prière. Un mois se
+   lit d'un coup d'œil, sans chiffre à comparer. */
+.track-grid-wrap { overflow-x: auto; padding-bottom: var(--s1); }
+.track-grid {
+  display: grid;
+  grid-template-columns: 44px repeat(30, 1fr);
+  gap: 3px;
+  min-width: 300px;
+}
+.track-grid .lbl {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-3);
+  display: flex; align-items: center;
+}
+.track-grid i {
+  aspect-ratio: 1; border-radius: 2px;
+  background: var(--line);
+}
+.track-grid i.done { background: var(--accent); }
+.track-grid i.miss { background: hsl(6, 45%, 30%); }
+.track-grid i.todo { background: var(--line); opacity: 0.45; }
+
+.track-legend {
+  display: flex; flex-wrap: wrap; gap: var(--s4);
+  font-size: var(--t-label); color: var(--text-3);
+  margin-top: var(--s2);
+}
+.track-legend span { display: flex; align-items: center; gap: 6px; }
+.track-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.track-legend .dot.done { background: var(--accent); }
+.track-legend .dot.miss { background: hsl(6, 45%, 30%); }
+.track-legend .dot.todo { background: var(--line); }
+
+.panel.stats { flex-direction: row; justify-content: space-around; text-align: center; }
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat b { font-size: 26px; font-weight: 300; color: var(--accent); letter-spacing: -0.01em; }
+.stat span { font-size: var(--t-label); color: var(--text-3); }
+
+/* Lever du soleil : ce n'est pas une prière, c'est la FIN du temps du Fajr.
+   Ligne plus discrète, sans cloche ni suivi. */
+.row.is-marker { background: transparent; border-style: dashed; border-color: var(--line); min-height: 46px; }
+.row.is-marker .row-name { font-weight: 500; color: var(--text-3); font-size: 13px; }
+.row.is-marker .row-time { font-size: 15px; color: var(--text-3); }
+
+/* Fenêtre de la prière en cours : « jusqu'à 13:47 ». */
+.row-until {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent);
+  display: block; margin-top: 1px;
+}
+
+/* ------------------------------------------------------------ RÉGLAGES */
+.set-sheet { display: flex; flex-direction: column; gap: var(--s6); padding-bottom: var(--s5); }
+.set-group { border: 0; display: flex; flex-direction: column; gap: var(--s3); }
+.set-group legend {
+  font-size: var(--t-label); font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-2);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+  width: 100%;
+}
+.set-help { font-size: var(--t-micro); line-height: 1.55; color: var(--text-3); }
+
+.set-row { display: flex; flex-direction: column; gap: var(--s2); }
+.set-row label { font-size: var(--t-micro); font-weight: 600; color: var(--text-2); }
+.set-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s3); }
+/* Largeur = longueur attendue. */
+.set-row.w-xs { max-width: 9rem; }
+.set-row.w-sm { max-width: 11rem; }
+.set-row.w-md { max-width: 20rem; }
+
+input[type="text"], input[type="number"], select {
+  width: 100%; min-height: 48px; padding: 0 var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--text-3);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit; font-size: 16px;   /* 16 px : évite le zoom iOS */
+}
+select { appearance: none; padding-right: var(--s6); }
+input:focus-visible, select:focus-visible {
+  outline: none; border-color: var(--accent); background: var(--surface-up);
+}
+
+.set-toggles { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.set-toggle {
+  display: flex; align-items: center; gap: var(--s2);
+  min-height: 48px; padding: 0 var(--s4) 0 var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--text-3);
+  border-radius: 99px;
+  color: var(--text-2); font-size: 14px; cursor: pointer;
+  transition: transform var(--fast) var(--ease);
+}
+.set-toggle:active { transform: scale(0.96); }
+.set-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.set-toggle .box {
+  width: 20px; height: 20px; flex: 0 0 auto;
+  border: 2px solid var(--text-3); border-radius: 6px;
+  display: grid; place-items: center;
+}
+.set-toggle .box::after {
+  content: "✓"; font-size: 14px; font-weight: 700; line-height: 1;
+  color: var(--ground); opacity: 0;
+}
+.set-toggle:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.set-toggle:has(input:checked) .box { background: var(--accent); border-color: var(--accent); }
+.set-toggle:has(input:checked) .box::after { opacity: 1; }
+.set-toggle:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.set-preview, .set-errors {
+  font-size: var(--t-micro); line-height: 1.6;
+  padding: var(--s3) var(--s4);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  white-space: pre-line;
+}
+.set-preview { color: var(--text-2); background: var(--surface); border-left: 2px solid var(--accent); }
+.set-errors  { color: hsl(6, 70%, 78%); background: hsl(6, 40%, 16%); border-left: 2px solid var(--danger); }
+.set-errors.hidden { display: none; }
+
+.set-actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.set-source {
+  font-size: var(--t-label); line-height: 1.6; color: var(--text-3);
+  border-top: 1px solid var(--line); padding-top: var(--s4);
+}
+
+/* ---------------------------------------------------------------- DHIKR */
+/* ⚠️ Ce compteur se touche des CENTAINES de fois d'affilée. Règle des guides
+   motion : un geste très fréquent ne s'anime pas. Le chiffre ne bouge donc
+   jamais, et l'anneau se met à jour instantanément — une transition, même de
+   80 ms, n'aurait jamais le temps de se poser entre deux touches et
+   donnerait un rendu nerveux. Seule la surface accuse la pression. */
+.dhikr {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; flex-direction: column;
+  background: var(--ground);
+}
+.dhikr.hidden { display: none; }
+
+.dhikr-head {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: calc(var(--s3) + env(safe-area-inset-top, 0px)) var(--s3) var(--s2);
+}
+.dhikr-presets { display: flex; gap: var(--s2); overflow-x: auto; flex: 1; }
+.dhikr-preset {
+  flex: 0 0 auto;
+  min-height: 40px; padding: 0 var(--s3);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 99px; color: var(--text-3);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.dhikr-preset.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* Toute la surface centrale compte. */
+.dhikr-tap {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s2);
+  background: none; border: 0; cursor: pointer;
+  color: inherit; font-family: inherit;
+  padding: var(--s4);
+  transition: background var(--fast) linear;
+}
+.dhikr-tap:active { background: var(--surface); }
+.dhikr-tap:focus-visible { outline: 2px solid var(--accent); outline-offset: -6px; }
+
+.dhikr-arabic { font-size: clamp(30px, 10vw, 48px); direction: rtl; color: var(--text); }
+.dhikr-name   { font-size: var(--t-micro); letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-3); }
+.dhikr-count  { font-size: clamp(76px, 26vw, 132px); font-weight: 200; line-height: 1; color: var(--accent); letter-spacing: -0.03em; }
+.dhikr-goal   { font-size: var(--t-body); color: var(--text-3); }
+
+.dhikr-ring { width: min(72vw, 300px); height: 6px; background: var(--surface-up); border-radius: 99px; overflow: hidden; margin-top: var(--s2); }
+.dhikr-ring-fill { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
+.dhikr-tap.is-complete .dhikr-ring-fill { background: var(--text); }
+.dhikr-tap.is-complete .dhikr-count { color: var(--text); }
+
+.dhikr-hint { font-size: var(--t-label); color: var(--text-3); opacity: 0.7; margin-top: var(--s3); }
+
+.dhikr-foot {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+}
+.dhikr-total { margin-left: auto; font-size: var(--t-micro); color: var(--text-3); }
+.dhikr-foot .hidden { display: none; }
+
+.dhikr-open-row { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s1); }
+.dhikr-today { font-size: var(--t-micro); color: var(--text-3); }
+
+/* --------------------------------------------------------------- RAPPEL */
+/* Bandeau discret, sous le pouce du haut. Il n'interrompt rien : pas de
+   fenêtre modale, rien à valider, il se referme seul. */
+.reminder {
+  position: fixed;
+  left: var(--s3); right: var(--s3);
+  top: calc(var(--s3) + env(safe-area-inset-top, 0px));
+  z-index: 20;
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px hsla(226, 40%, 3%, 0.55);
+  max-width: 520px; margin: 0 auto;
+}
+.reminder.hidden { display: none; }
+
+@keyframes reminder-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+.reminder:not(.hidden) { animation: reminder-in var(--mid) var(--ease) both; }
+
+.reminder-body { display: flex; align-items: center; gap: var(--s3); flex: 1; min-width: 0; }
+.reminder-ico {
+  width: 22px; height: 22px; flex: 0 0 auto;
+  background: var(--accent);
+  -webkit-mask: var(--ico-bell-on) center / contain no-repeat;
+          mask: var(--ico-bell-on) center / contain no-repeat;
+}
+.reminder b { display: block; font-size: var(--t-body); color: var(--accent); }
+.reminder span#reminder-sub { display: block; font-size: var(--t-micro); color: var(--text-2); }
+.reminder-close {
+  flex: 0 0 auto; width: 44px; height: 44px;
+  background: none; border: 0; cursor: pointer;
+  color: var(--text-2); font-size: 24px; line-height: 1;
+  border-radius: 50%;
+  transition: transform var(--fast) var(--ease);
+}
+.reminder-close:active { transform: scale(0.9); }
+.reminder-close:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* -------------------------------------------------------------- JOURNAL */
+#log-area {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+  max-height: 40vh; overflow-y: auto; display: none;
+  padding: var(--s3) var(--s4);
+  background: var(--surface-up); border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px; line-height: 1.6;
+}
+#log-area.visible { display: block; }
+
+/* --------------------------------------------------------------- ALARME */
+#alarm {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--s3); padding: var(--s6); text-align: center;
+  background:
+    radial-gradient(120% 80% at 50% 12%, hsl(38, 42%, 15%) 0%, transparent 62%),
+    var(--ground);
+}
+#alarm.hidden { display: none; }
+#alarm-prayer-name {
+  font-size: clamp(46px, 16vw, 88px); font-weight: 200;
+  line-height: 1; letter-spacing: -0.03em; color: var(--accent);
+}
+#alarm-arabic { font-size: clamp(28px, 9vw, 44px); font-weight: 300; direction: rtl; }
+#alarm-time { font-size: 18px; color: var(--text-3); margin-bottom: var(--s5); }
+
+@keyframes alarm-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+#alarm:not(.hidden) { animation: alarm-in var(--mid) var(--ease) both; }
+
+/* --------------------------------------------------- GRAND ÉCRAN / TV */
+/* Au-delà d'une tablette, l'app reste une colonne centrée plutôt que de
+   s'étirer : un composant a une largeur idéale. */
+@media (min-width: 900px) {
+  :root { --t-hero: 64px; --t-count: 50px; }
+  .view { max-width: 620px; }
+}
+
+/* ------------------------------------------------------------ MOUVEMENT */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

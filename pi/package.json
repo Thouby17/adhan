@@ -1,0 +1,16 @@
+{
+  "name": "adhan-pi",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Appareil du salon : horaires de prière et adhan automatique sur Raspberry Pi.",
+  "main": "adhan-daemon.js",
+  "scripts": {
+    "start": "node adhan-daemon.js",
+    "test-son": "node adhan-daemon.js --test-son"
+  },
+  "dependencies": {
+    "castv2-client": "^1.2.0",
+    "multicast-dns": "^7.2.5"
+  },
+  "license": "MIT"
+}

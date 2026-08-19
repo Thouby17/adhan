@@ -1,0 +1,11 @@
+{
+  "name": "com.thoubaine.adhan.service",
+  "version": "1.1.0",
+  "description": "Background service for Adhan TV app",
+  "main": "adhan_service.js",
+  "scripts": {
+    "test": "echo \"no test specified\" && exit 0"
+  },
+  "author": "Thoubaine",
+  "license": "MIT"
+}

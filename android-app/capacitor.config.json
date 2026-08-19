@@ -1,0 +1,11 @@
+{
+  "appId": "be.thoubaine.adhan",
+  "appName": "Adhan",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

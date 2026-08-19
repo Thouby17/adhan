@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1017">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Adhan</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <main id="views">
+
+      <!-- ==================== AUJOURD'HUI ==================== -->
+      <section id="view-today" class="view">
+
+        <header class="topbar">
+          <div class="topbar-place">
+            <span class="pin" aria-hidden="true"></span>
+            <span id="place-name">—</span>
+          </div>
+          <div class="topbar-dates">
+            <div id="date-hijri">—</div>
+            <div id="date-greg">—</div>
+          </div>
+        </header>
+
+        <!-- La carte du haut répond à LA question qu'on ouvre l'app pour poser :
+             c'est quand, la prochaine ? Tout le reste est secondaire. -->
+        <div class="hero">
+          <p class="hero-label">Prochaine prière</p>
+          <h1 id="next-prayer-name">—</h1>
+          <p id="next-prayer-at" class="hero-at">—</p>
+          <p id="next-prayer-countdown" class="hero-count">--:--:--</p>
+
+          <!-- Avancement depuis la prière précédente : on voit où on en est
+               dans la journée sans faire de calcul mental. -->
+          <div class="progress" role="img" aria-label="Avancement jusqu'à la prochaine prière">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <div class="progress-ends">
+            <span id="progress-from">—</span>
+            <span id="progress-to">—</span>
+          </div>
+        </div>
+
+        <!-- Les cinq prières. La cloche est SUR la ligne : on coupe ou rétablit
+             le son là où on regarde l'horaire, sans passer par les réglages. -->
+        <ul id="prayer-rows" class="rows"></ul>
+
+        <section class="panel">
+          <h2 class="panel-title">La course du soleil</h2>
+          <p class="panel-help">
+            La courbe est la hauteur du soleil sur 24 h. Ligne pleine :
+            l'horizon. Pointillés : les −18° de la nuit noire.
+          </p>
+          <div id="sky"></div>
+        </section>
+
+        <div class="tail">
+          <button id="btn-test" class="btn btn-ghost">Écouter l'adhan</button>
+        </div>
+      </section>
+
+      <!-- ==================== QIBLA ==================== -->
+      <section id="view-qibla" class="view hidden">
+        <header class="topbar">
+          <div class="topbar-place">
+            <span class="pin" aria-hidden="true"></span>
+            <span id="qibla-place">—</span>
+          </div>
+        </header>
+
+        <div class="qibla-wrap">
+          <div id="qibla-dial" class="qibla-dial"></div>
+          <p id="qibla-deg" class="qibla-deg">—</p>
+          <p id="qibla-hint" class="qibla-hint">—</p>
+          <button id="btn-compass" class="btn btn-ghost">Activer la boussole</button>
+        </div>
+
+        <p class="panel-help center">
+          Direction calculée sur l'appareil, par la route la plus courte à la
+          surface du globe. Aucune connexion nécessaire.
+        </p>
+      </section>
+
+      <!-- ==================== SUIVI ==================== -->
+      <section id="view-track" class="view hidden">
+        <header class="topbar"><h1 class="topbar-title">Suivi des prières</h1></header>
+
+        <div class="panel">
+          <h2 class="panel-title">Aujourd'hui</h2>
+          <p class="panel-help">Touche une prière pour la marquer accomplie.</p>
+          <div id="track-today" class="track-today"></div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title">Les 30 derniers jours</h2>
+          <div class="track-grid-wrap"><div id="track-grid" class="track-grid"></div></div>
+          <div class="track-legend">
+            <span><i class="dot done"></i> accomplie</span>
+            <span><i class="dot miss"></i> manquée</span>
+            <span><i class="dot todo"></i> à venir</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title">Dhikr</h2>
+          <p class="panel-help">Compteur plein écran — on touche n'importe où pour compter.</p>
+          <div class="dhikr-open-row">
+            <button id="btn-dhikr" class="btn btn-primary">Ouvrir le compteur</button>
+            <span id="dhikr-today" class="dhikr-today">—</span>
+          </div>
+        </div>
+
+        <div class="panel stats">
+          <div class="stat"><b id="stat-rate">—</b><span>ce mois-ci</span></div>
+          <div class="stat"><b id="stat-streak">—</b><span>jours d'affilée</span></div>
+          <div class="stat"><b id="stat-total">—</b><span>prières accomplies</span></div>
+        </div>
+
+        <p class="panel-help center">
+          Ce suivi reste sur cet appareil. Rien n'est envoyé nulle part.
+        </p>
+      </section>
+
+      <!-- ==================== MOIS ==================== -->
+      <section id="view-month" class="view hidden">
+        <header class="topbar month-bar">
+          <button id="month-prev" class="btn-icon" aria-label="Mois précédent">‹</button>
+          <div id="month-label" class="month-label">—</div>
+          <button id="month-next" class="btn-icon" aria-label="Mois suivant">›</button>
+        </header>
+        <div class="table-wrap">
+          <table id="month-table" class="month-table"></table>
+        </div>
+      </section>
+
+      <!-- ==================== RÉGLAGES ==================== -->
+      <section id="view-settings" class="view hidden">
+        <header class="topbar">
+          <h1 class="topbar-title">Réglages</h1>
+        </header>
+
+        <div class="set-sheet">
+          <p id="set-store" class="panel-help">—</p>
+
+          <fieldset class="set-group">
+            <legend>Prières qui déclenchent l'adhan</legend>
+            <p class="set-help">Les autres restent affichées, mais en silence.</p>
+            <div id="set-prayers" class="set-toggles"></div>
+          </fieldset>
+
+          <fieldset class="set-group">
+            <legend>Rappel après l'adhan</legend>
+            <p class="set-help">
+              Un rappel discret quelques minutes après l'appel, pour ne pas
+              laisser passer le temps. C'est un rappel personnel — pas une
+              heure d'iqama, qui elle est décidée par chaque mosquée.
+            </p>
+            <div class="set-row w-sm">
+              <label for="set-reminder">Délai</label>
+              <select id="set-reminder">
+                <option value="0">Aucun rappel</option>
+                <option value="5">5 minutes après</option>
+                <option value="10">10 minutes après</option>
+                <option value="15">15 minutes après</option>
+                <option value="20">20 minutes après</option>
+                <option value="30">30 minutes après</option>
+              </select>
+            </div>
+          </fieldset>
+
+          <fieldset class="set-group">
+            <legend>Localisation</legend>
+            <p class="set-help">
+              Les horaires sont calculés sur l'appareil à partir de ces
+              coordonnées. Un déplacement de 3 km les change de moins d'une minute.
+            </p>
+            <div class="set-row w-md">
+              <label for="set-place">Nom du lieu</label>
+              <input id="set-place" type="text" autocomplete="off" placeholder="Bruxelles">
+            </div>
+            <div class="set-grid-2">
+              <div class="set-row w-sm">
+                <label for="set-lat">Latitude</label>
+                <input id="set-lat" type="number" step="0.0001" min="-90" max="90" inputmode="decimal">
+              </div>
+              <div class="set-row w-sm">
+                <label for="set-lng">Longitude</label>
+                <input id="set-lng" type="number" step="0.0001" min="-180" max="180" inputmode="decimal">
+              </div>
+            </div>
+            <button id="btn-locate" class="btn btn-ghost">Utiliser ma position</button>
+          </fieldset>
+
+          <fieldset class="set-group">
+            <legend>Méthode de calcul</legend>
+            <div class="set-grid-2">
+              <div class="set-row w-xs">
+                <label for="set-fajr-angle">Angle du Fajr</label>
+                <input id="set-fajr-angle" type="number" step="0.5" min="8" max="24" inputmode="decimal">
+              </div>
+              <div class="set-row w-xs">
+                <label for="set-isha-angle">Angle de l'Isha</label>
+                <input id="set-isha-angle" type="number" step="0.5" min="8" max="24" inputmode="decimal">
+              </div>
+            </div>
+            <div class="set-row w-md">
+              <label for="set-asr">Asr</label>
+              <select id="set-asr">
+                <option value="Shafii">Shafi'i — ombre = 1 × l'objet</option>
+                <option value="Hanafi">Hanafi — ombre = 2 × l'objet</option>
+              </select>
+            </div>
+          </fieldset>
+
+          <fieldset class="set-group">
+            <legend>Nuits d'été</legend>
+            <p class="set-help">
+              Du 26 mai au 16 juillet à Bruxelles, le soleil ne descend jamais
+              à 18° sous l'horizon : Fajr et Isha n'ont plus de signe
+              observable. Cette règle dit par quoi les remplacer. C'est un
+              choix religieux.
+            </p>
+            <div class="set-row">
+              <label for="set-highlats">Règle appliquée</label>
+              <select id="set-highlats">
+                <option value="AngleBased">Angle — fraction de nuit proportionnelle</option>
+                <option value="NightMiddle">Milieu de la nuit</option>
+                <option value="OneSeventh">Un septième de la nuit</option>
+                <option value="None">Aucune — afficher « --:-- »</option>
+              </select>
+            </div>
+            <p id="set-preview" class="set-preview">—</p>
+          </fieldset>
+
+          <p id="set-errors" class="set-errors hidden"></p>
+
+          <div class="set-actions">
+            <button id="btn-set-save" class="btn btn-primary">Enregistrer</button>
+            <button id="btn-set-cancel" class="btn btn-ghost">Annuler</button>
+          </div>
+          <div class="set-actions">
+            <button id="btn-set-reset" class="btn btn-quiet">Valeurs d'origine</button>
+            <button id="btn-toggle-log" class="btn btn-quiet">Journal</button>
+          </div>
+
+          <p class="set-source">
+            Horaires calculés sur l'appareil, sans connexion. Algorithme
+            PrayTimes.org (H. Zarrabi-Zadeh), vérifié à moins de 2 minutes près
+            sur une année complète.
+          </p>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Barre d'onglets en bas : c'est la zone du pouce. Quatre entrées,
+         libellées — une icône seule se devine mal. -->
+    <nav id="tabbar" class="tabbar">
+      <button class="tab is-active" data-view="today">
+        <span class="tab-ico" data-ico="today" aria-hidden="true"></span>
+        <span class="tab-txt">Aujourd'hui</span>
+      </button>
+      <button class="tab" data-view="track">
+        <span class="tab-ico" data-ico="track" aria-hidden="true"></span>
+        <span class="tab-txt">Suivi</span>
+      </button>
+      <button class="tab" data-view="qibla">
+        <span class="tab-ico" data-ico="qibla" aria-hidden="true"></span>
+        <span class="tab-txt">Qibla</span>
+      </button>
+      <button class="tab" data-view="month">
+        <span class="tab-ico" data-ico="month" aria-hidden="true"></span>
+        <span class="tab-txt">Mois</span>
+      </button>
+      <button class="tab" data-view="settings">
+        <span class="tab-ico" data-ico="settings" aria-hidden="true"></span>
+        <span class="tab-txt">Réglages</span>
+      </button>
+    </nav>
+
+    <!-- ==================== ALARME ==================== -->
+    <section id="alarm" class="hidden">
+      <div id="alarm-prayer-name">—</div>
+      <div id="alarm-arabic">الله أكبر</div>
+      <div id="alarm-time">--:--</div>
+      <button id="alarm-stop" class="btn btn-primary btn-big">Arrêter l'adhan</button>
+      <audio id="alarm-audio" preload="auto"></audio>
+    </section>
+
+    <!-- ==================== COMPTEUR DE DHIKR ====================
+         Plein écran, parce qu'on le touche des centaines de fois : toute la
+         surface centrale compte. Les commandes sont reléguées aux bords pour
+         qu'on ne les heurte jamais par mégarde. -->
+    <section id="dhikr" class="dhikr hidden">
+      <header class="dhikr-head">
+        <button id="dhikr-close" class="btn-icon" aria-label="Fermer le compteur">×</button>
+        <div id="dhikr-presets" class="dhikr-presets"></div>
+      </header>
+
+      <button id="dhikr-tap" class="dhikr-tap" aria-label="Compter">
+        <span id="dhikr-arabic" class="dhikr-arabic">—</span>
+        <span id="dhikr-name" class="dhikr-name">—</span>
+        <strong id="dhikr-count" class="dhikr-count">0</strong>
+        <span id="dhikr-goal" class="dhikr-goal">—</span>
+        <span class="dhikr-ring"><span id="dhikr-ring-fill" class="dhikr-ring-fill"></span></span>
+        <span class="dhikr-hint">touche n'importe où</span>
+      </button>
+
+      <footer class="dhikr-foot">
+        <button id="dhikr-reset" class="btn btn-quiet">Remettre à zéro</button>
+        <button id="dhikr-undo" class="btn btn-quiet hidden">Annuler</button>
+        <span id="dhikr-total" class="dhikr-total">—</span>
+      </footer>
+    </section>
+
+    <!-- Rappel personnel après l'adhan. Discret : il n'interrompt rien,
+         il se referme seul, et il se ferme d'un tap n'importe où dessus. -->
+    <div id="reminder" class="reminder hidden" role="status" aria-live="polite">
+      <div class="reminder-body">
+        <span class="reminder-ico" aria-hidden="true"></span>
+        <div>
+          <b id="reminder-title">—</b>
+          <span id="reminder-sub">—</span>
+        </div>
+      </div>
+      <button id="reminder-close" class="reminder-close" aria-label="Fermer le rappel">×</button>
+    </div>
+
+    <div id="log-area"></div>
+  </div>
+
+  <script src="webOSTVjs-1.2.11/webOSTV.js" onerror="console.warn('webOSTV.js absent — hors TV')"></script>
+  <script src="config.js"></script>
+  <script src="praytimes.js"></script>
+  <script src="settings.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

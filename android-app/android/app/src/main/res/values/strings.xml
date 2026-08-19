@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Adhan</string>
+    <string name="title_activity_main">Adhan</string>
+    <string name="package_name">be.thoubaine.adhan</string>
+    <string name="custom_url_scheme">be.thoubaine.adhan</string>
+</resources>

@@ -1,0 +1,15 @@
+{
+  "name": "adhan-tv",
+  "version": "1.1.0",
+  "private": true,
+  "description": "App webOS (LG) qui affiche les horaires de prière et joue l'adhan automatiquement.",
+  "scripts": {
+    "sync": "node tools/sync.js",
+    "test": "node tests/run.js",
+    "package": "npm test && ares-package src/app src/service",
+    "serve": "node tools/serve.js",
+    "tablette": "node tools/build-standalone.js"
+  },
+  "author": "Thoubaine",
+  "license": "MIT"
+}

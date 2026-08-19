@@ -1,0 +1,29 @@
+# Service systemd — à copier dans /etc/systemd/system/adhan.service
+#
+#   sudo cp pi/adhan.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now adhan
+#   systemctl status adhan          (doit afficher "active (running)")
+#   journalctl -u adhan -f          (les journaux en direct)
+#
+# Restart=always + enable = le service repart tout seul s'il plante ET au
+# redémarrage du Pi. C'est ce qui supprime la panne silencieuse de la TV.
+
+[Unit]
+Description=Adhan — horaires de priere et appel automatique
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/adhan-tv
+ExecStart=/usr/bin/node /home/pi/adhan-tv/pi/adhan-daemon.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

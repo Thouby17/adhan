@@ -1,0 +1,29 @@
+node_modules/
+pi/node_modules/
+android-app/node_modules/
+android-app/www/
+android-app/android/app/build/
+android-app/android/build/
+android-app/android/.gradle/
+android-app/android/local.properties
+
+# Fichiers fabriqués par `npm run tablette` — regenerables, et lourds (5,6 Mo)
+adhan-tablette.html
+adhan-page.html
+
+# Sauvegarde locale d'avant les corrections du 18/08
+.backup-avant-corrections/
+
+# Paquet webOS
+*.ipk
+
+# Traces de tests
+*.log
+adhan-fired.json
+
+# Fichiers web recopies dans le projet Android par `cap sync` — generes,
+# jamais edites a la main. Les versionner reintroduirait une copie perimee
+# de config.js (et, la premiere fois, une position personnelle).
+android-app/android/app/src/main/assets/public/
+android-app/android/app/src/main/assets/capacitor.config.json
+android-app/android/app/src/main/assets/capacitor.plugins.json

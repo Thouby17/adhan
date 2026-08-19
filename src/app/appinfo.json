@@ -1,0 +1,14 @@
+{
+  "id": "com.thoubaine.adhan",
+  "version": "1.1.0",
+  "vendor": "Thoubaine",
+  "type": "web",
+  "main": "index.html",
+  "title": "Adhan TV",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "iconColor": "#0a3d2e",
+  "bgColor": "#0a3d2e",
+  "uiRevision": 2,
+  "disableBackHistoryAPI": true
+}

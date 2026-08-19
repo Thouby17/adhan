@@ -1,0 +1,9 @@
+{
+  "id": "com.thoubaine.adhan.service",
+  "description": "Adhan background service: monitors prayer times and triggers the alarm.",
+  "services": [
+    {
+      "name": "com.thoubaine.adhan.service"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "adhan-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coquille Android de l'app Adhan — tout est embarque, aucun serveur.",
+  "scripts": {
+    "assets": "node ../tools/build-android-assets.js",
+    "sync": "npm run assets && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1"
+  }
+}
