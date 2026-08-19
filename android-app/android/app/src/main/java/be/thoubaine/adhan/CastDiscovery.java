@@ -119,6 +119,18 @@ final class CastDiscovery {
     private static void lire(byte[] b, int taille, List<Appareil> trouves) {
         try {
             if (taille < 12) return;
+
+            // Trouve en relecture : le port 5353 recoit le trafic mDNS de TOUT
+            // le reseau — imprimantes, televiseurs, enceintes. Sans ce filtre,
+            // la premiere imprimante qui s'annoncait pendant la recherche
+            // devenait « la barre de son ». Un paquet qui parle de Cast
+            // contient forcement l'etiquette « _googlecast » en clair au moins
+            // une fois (la compression DNS pointe vers une premiere
+            // occurrence litterale). ISO-8859-1 : un octet = un caractere,
+            // aucun risque de mutiler la recherche.
+            final String brut = new String(b, 0, taille,
+                java.nio.charset.StandardCharsets.ISO_8859_1);
+            if (!brut.contains("_googlecast")) return;
             final int questions = ((b[4] & 0xFF) << 8) | (b[5] & 0xFF);
             int enregistrements = (((b[6] & 0xFF) << 8) | (b[7] & 0xFF))
                                 + (((b[8] & 0xFF) << 8) | (b[9] & 0xFF))

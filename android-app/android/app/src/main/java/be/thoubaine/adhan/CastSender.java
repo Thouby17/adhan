@@ -53,6 +53,25 @@ final class CastSender {
     private volatile boolean vivant = false;
     private int requete = 1;
 
+    /**
+     * La session active, pour pouvoir l'ARRETER de l'exterieur.
+     *
+     * Trouve en relecture : le bouton « Arreter » de la notification coupait
+     * l'etat interne du service mais n'envoyait JAMAIS l'ordre a la barre —
+     * qui continuait les trois minutes. En pleine nuit, c'est exactement le
+     * bouton dont on a besoin, et il ne faisait rien.
+     */
+    private static volatile CastSender enCoursDeLecture;
+    private volatile boolean arretDemande = false;
+    private volatile int mediaSession = -1;
+    private volatile String transportActif = null;
+
+    /** Demande l'arret de la lecture Cast en cours, s'il y en a une. */
+    static void arreterEnCours() {
+        final CastSender s = enCoursDeLecture;
+        if (s != null) s.arretDemande = true;
+    }
+
     // -----------------------------------------------------------------
     // Point d'entree
     // -----------------------------------------------------------------
@@ -64,6 +83,7 @@ final class CastSender {
     static Resultat jouer(Context ctx, String hote, double plancher) {
         final CastSender s = new CastSender();
         final MediaHost serveur = new MediaHost();
+        enCoursDeLecture = s;
         try {
             final String url = serveur.demarrer(ctx);
             if (url == null) return new Resultat(false, "serveur local impossible");
@@ -72,6 +92,7 @@ final class CastSender {
             Log.e(TAG, "echec : " + e.getMessage(), e);
             return new Resultat(false, e.getMessage());
         } finally {
+            enCoursDeLecture = null;
             s.fermer();
             serveur.arreter();
         }
@@ -150,7 +171,13 @@ final class CastSender {
             }
         }
 
+        // L'arret peut arriver PENDANT le lancement : dans ce cas on ne
+        // charge rien du tout, plutot que de demarrer une lecture que
+        // l'utilisateur vient d'interdire.
+        if (arretDemande) return new Resultat(false, "arrete avant la lecture");
+
         // --- 4. Chargement du media --------------------------------------
+        transportActif = transport;
         envoyer(transport, CastProto.NS_CONNEXION, "{\"type\":\"CONNECT\"}");
 
         final JSONObject media = new JSONObject()
@@ -177,6 +204,21 @@ final class CastSender {
         boolean aJoue = false;
 
         while (System.currentTimeMillis() < limite) {
+            // L'utilisateur a appuye sur « Arreter » : on transmet l'ordre a
+            // la barre au lieu de simplement raccrocher — raccrocher laisse
+            // certaines barres finir le fichier qu'elles ont deja en memoire.
+            if (arretDemande) {
+                try {
+                    if (mediaSession >= 0 && transportActif != null) {
+                        envoyer(transportActif, CastProto.NS_MEDIA,
+                            "{\"type\":\"STOP\",\"mediaSessionId\":" + mediaSession
+                            + ",\"requestId\":" + (requete++) + "}");
+                        Thread.sleep(300);   // le temps que l'ordre parte
+                    }
+                } catch (Exception ignored) {}
+                return terminer(aJoue, serveur, "arrete par l'utilisateur");
+            }
+
             final long attente = Math.min(2000, prochainPing - System.currentTimeMillis());
             final CastProto.Message m = attendre(Math.max(200, attente));
 
@@ -200,6 +242,9 @@ final class CastSender {
             if (st == null || st.length() == 0) continue;
             final JSONObject s0 = st.optJSONObject(0);
             if (s0 == null) continue;
+
+            final int ms = s0.optInt("mediaSessionId", -1);
+            if (ms >= 0) mediaSession = ms;
 
             final String etat = s0.optString("playerState", "");
             if ("PLAYING".equals(etat)) aJoue = true;

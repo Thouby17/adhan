@@ -150,7 +150,10 @@
       hote: cfg.castHost || "",
       plancher: cfg.castMinVolume
     })
-      .then(r => log("Alarmes Android : " + r.armees + " armées sur " + r.envoyees + " envoyées"))
+      .then(function (r) {
+        log("Alarmes Android : " + r.armees + " armées sur " + r.envoyees + " envoyées");
+        rafraichirDiagnostic();
+      })
       .catch(e => log("⚠ Programmation Android impossible : " + e.message));
   }
 
@@ -1117,7 +1120,10 @@
   // ---------- Barre de son ----------------------------------------------
   function majLigneBarre() {
     const row = document.getElementById("row-casthost");
-    const act = document.querySelector(".set-actions");
+    // Par identifiant, pas par classe : il y a QUATRE blocs .set-actions dans
+    // la page, et querySelector rendait le premier — celui du test de reveil.
+    // Choisir « la tablette » cachait le mauvais bloc.
+    const act = document.getElementById("actions-barre");
     // L'adresse et l'essai n'ont aucun sens si le son sort de la tablette.
     const utile = dom.setOutput && dom.setOutput.value !== "local";
     if (row) row.classList.toggle("hidden", !utile);

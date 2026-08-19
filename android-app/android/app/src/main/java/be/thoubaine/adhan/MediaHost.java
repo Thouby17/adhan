@@ -144,8 +144,19 @@ final class MediaHost {
         if (plage != null && plage.toLowerCase(Locale.ROOT).startsWith("bytes=")) {
             try {
                 final String[] p = plage.substring(6).split("-", -1);
-                if (p.length > 0 && p[0].length() > 0) debut = Long.parseLong(p[0].trim());
-                if (p.length > 1 && p[1].length() > 0) fin = Long.parseLong(p[1].trim());
+                if (p.length > 0 && p[0].length() > 0) {
+                    debut = Long.parseLong(p[0].trim());
+                    if (p.length > 1 && p[1].length() > 0) fin = Long.parseLong(p[1].trim());
+                } else if (p.length > 1 && p[1].length() > 0) {
+                    // Trouve en relecture : « bytes=-N » demande les N DERNIERS
+                    // octets, pas les N premiers. C'est exactement la requete
+                    // qu'un lecteur emet pour trouver l'index d'un MP4 — la
+                    // servir a l'envers rejouerait la panne des quatre
+                    // telechargements sans lecture.
+                    final long n = Long.parseLong(p[1].trim());
+                    debut = Math.max(0, taille - n);
+                    fin = taille - 1;
+                }
                 if (debut < 0 || debut >= taille) { debut = 0; fin = taille - 1; }
                 if (fin >= taille) fin = taille - 1;
                 partiel = true;

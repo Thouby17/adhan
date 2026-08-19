@@ -55,6 +55,15 @@ public class AdhanService extends Service {
     private MediaPlayer player;
     private PowerManager.WakeLock veilleEcran;
 
+    /**
+     * Le Cast est-il en train de diffuser ? Trouve en relecture : en mode
+     * « les deux », la fin du son LOCAL arretait le service pendant que la
+     * barre streamait encore — tuant le serveur de fichier au passage, donc
+     * coupant la barre en plein adhan. Chaque voie ne peut arreter le service
+     * que si l'autre a fini.
+     */
+    private volatile boolean castEnCours = false;
+
     @Override
     public IBinder onBind(Intent intent) { return null; }
 
@@ -75,6 +84,10 @@ public class AdhanService extends Service {
         demarrerAuPremierPlan(ACTION_JOUER.equals(action));
 
         if (ACTION_ARRETER.equals(action)) {
+            // L'ordre d'arret doit atteindre la BARRE aussi : couper l'etat
+            // interne sans le lui transmettre la laissait finir ses trois
+            // minutes toute seule.
+            CastSender.arreterEnCours();
             arreterLecture();
             stopForeground(true);
             stopSelf();
@@ -119,39 +132,43 @@ public class AdhanService extends Service {
     }
 
     private void lancerCast(final boolean aussiEnLocal) {
+        castEnCours = true;
         if (aussiEnLocal) jouerLocal();
         final Context ctx = getApplicationContext();
         final Thread t = new Thread(new Runnable() {
             @Override public void run() {
-                String hote = Reglages.hote(ctx);
+                final String hote = Reglages.hote(ctx);
+                final String appris = Reglages.hoteTrouve(ctx);
                 CastSender.Resultat r = null;
 
                 if (hote != null) r = CastSender.jouer(ctx, hote, Reglages.plancher(ctx));
 
                 // L'adresse enregistree ne repond pas : la box a pu en
                 // distribuer une autre. On cherche avant d'abandonner.
-                if (r == null || !r.ok) {
-                    final String appris = Reglages.hoteTrouve(ctx);
-                    if (appris != null && !appris.equals(hote)) {
-                        r = CastSender.jouer(ctx, appris, Reglages.plancher(ctx));
-                        if (r.ok) hote = appris;
-                    }
+                if ((r == null || !r.ok) && appris != null && !appris.equals(hote)) {
+                    r = CastSender.jouer(ctx, appris, Reglages.plancher(ctx));
+                    if (r.ok) Log.i(TAG, "barre jointe via l'adresse apprise " + appris);
                 }
                 if (r == null || !r.ok) {
                     for (CastDiscovery.Appareil a : CastDiscovery.chercher(ctx, 6)) {
+                        // Deja tentees plus haut : re-echouer coute ~20 s chacune.
+                        if (a.ip.equals(hote) || a.ip.equals(appris)) continue;
                         r = CastSender.jouer(ctx, a.ip, Reglages.plancher(ctx));
                         if (r.ok) {
                             Reglages.memoriserHoteTrouve(ctx, a.ip);
                             Log.i(TAG, "barre retrouvee a " + a.ip + " (" + a.nom + ")");
-                            hote = a.ip;
                             break;
                         }
                     }
                 }
 
                 final boolean ok = r != null && r.ok;
-                Log.i(TAG, "Cast : " + (ok ? "réussi" : "echoue")
+                Log.i(TAG, "Cast : " + (ok ? "reussi" : "echoue")
                          + (r == null ? "" : " — " + r.detail));
+
+                // AVANT de rendre la main : la voie locale lit ce drapeau pour
+                // savoir si elle a le droit d'arreter le service.
+                castEnCours = false;
 
                 if (!ok && !aussiEnLocal) {
                     // Repli, sur le fil principal : MediaPlayer a besoin d'une
@@ -195,7 +212,15 @@ public class AdhanService extends Service {
 
             player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
                 @Override public void onCompletion(MediaPlayer mp) {
-                    Log.i(TAG, "adhan termine");
+                    Log.i(TAG, "adhan termine (haut-parleur local)");
+                    if (castEnCours) {
+                        // La barre diffuse encore : on libere juste le lecteur,
+                        // sans arreter le service ni annoncer la fin — c'est la
+                        // voie Cast qui fermera quand ELLE aura fini.
+                        try { player.release(); } catch (Exception ignored) {}
+                        player = null;
+                        return;
+                    }
                     arreterLecture();
                     stopForeground(true);
                     stopSelf();
@@ -212,6 +237,14 @@ public class AdhanService extends Service {
             Log.i(TAG, "adhan demarre sur le haut-parleur local");
         } catch (Exception e) {
             Log.e(TAG, "lecture impossible : " + e.getMessage(), e);
+            // Trouve en relecture : sans ce nettoyage, un echec local total
+            // laissait le service au premier plan POUR TOUJOURS, notification
+            // « Appel a la priere » figee et silence — le pire des zombies.
+            if (!castEnCours) {
+                arreterLecture();
+                stopForeground(true);
+                stopSelf();
+            }
         }
     }
 
@@ -226,12 +259,17 @@ public class AdhanService extends Service {
      */
     private void planchierVolume() {
         try {
+            // Le MEME reglage que pour la barre, pas une valeur a part :
+            // « ne jamais y toucher » (negatif) doit valoir partout, sinon le
+            // reglage ment sur une des deux sorties.
+            final double voulu = Reglages.plancher(this);
+            if (voulu < 0) return;
             final AudioManager am =
                 (AudioManager) getSystemService(Context.AUDIO_SERVICE);
             if (am == null) return;
             final int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
             final int actuel = am.getStreamVolume(AudioManager.STREAM_MUSIC);
-            final int plancher = Math.round(max * 0.5f);
+            final int plancher = (int) Math.round(max * voulu);
             if (actuel < plancher) {
                 Log.i(TAG, "volume " + actuel + "/" + max + " remonte a " + plancher);
                 am.setStreamVolume(AudioManager.STREAM_MUSIC, plancher, 0);
