@@ -31,7 +31,7 @@
   const EDITABLE = [
     "latitude", "longitude", "placeName",
     "fajrAngle", "ishaAngle", "highLats", "asrMethod",
-    "prayersWithAdhan", "reminderMinutes", "audioOutput", "castHost"
+    "prayersWithAdhan", "reminderMinutes", "audioOutput", "castHost", "castMinVolume"
   ];
 
   const HIGH_LATS = ["AngleBased", "NightMiddle", "OneSeventh", "None"];
@@ -101,6 +101,17 @@
       if (!isNum(v) || v < 0 || v > 60 || v % 1 !== 0) {
         errors.reminderMinutes = "Le rappel doit être un nombre entier de minutes, entre 0 et 60. Mettre 0 pour le désactiver.";
       } else out.reminderMinutes = v;
+    }
+
+    if ("castMinVolume" in patch) {
+      const v = patch.castMinVolume;
+      if (v === null) out.castMinVolume = null;
+      else {
+        const n = Number(v);
+        if (!isNum(n) || n < 0 || n > 1) {
+          errors.castMinVolume = "Le volume doit être un nombre entre 0 et 1 (0,4 = 40 %). Mettre null pour ne jamais y toucher.";
+        } else out.castMinVolume = n;
+      }
     }
 
     if ("audioOutput" in patch) {

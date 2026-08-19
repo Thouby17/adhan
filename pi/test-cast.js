@@ -22,6 +22,8 @@ const args = process.argv.slice(2);
 const target = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a));
 const scanIdx = args.indexOf("--scan");
 const scanSeconds = scanIdx >= 0 ? Number(args[scanIdx + 1]) || 12 : 12;
+const volIdx = args.indexOf("--volume");
+const WANT_VOL = Math.min(1, Math.max(0, (volIdx >= 0 ? Number(args[volIdx + 1]) : 70) / 100));
 
 function line() { console.log("-".repeat(64)); }
 
@@ -170,15 +172,25 @@ function check(host, holdSec) {
         // S'il est à zéro, la barre « lit » en silence — panne parfaitement
         // silencieuse, et le protocole ne s'en plaint jamais.
         client.getVolume(function (ev, vol) {
-          if (!ev && vol) {
-            console.log("       volume Cast de la barre : " +
-              Math.round((vol.level || 0) * 100) + " %" +
-              (vol.muted ? "  ⚠ COUPÉ (mute)" : ""));
-            if (vol.muted || (vol.level || 0) < 0.15) {
-              console.log("       → on le remonte à 40 % pour le test");
-              try { client.setVolume({ level: 0.4, muted: false }, function () {}); } catch (e) {}
-            }
-          }
+          if (ev || !vol) { console.log("       volume illisible : " + (ev && ev.message)); return; }
+          console.log("       volume Cast AVANT : " + Math.round((vol.level || 0) * 100) + " %" +
+            (vol.muted ? "  ⚠ COUPÉ (mute)" : ""));
+          console.log("       → on impose " + Math.round(WANT_VOL * 100) + " %");
+          client.setVolume({ level: WANT_VOL, muted: false }, function (e2) {
+            // On RELIT après avoir écrit : « pas d'erreur » ne prouve pas que
+            // la barre a obéi. C'est la vérification d'état, pas d'absence
+            // d'erreur — la même règle qui a démasqué le IDLE de tout à l'heure.
+            setTimeout(function () {
+              client.getVolume(function (e3, v2) {
+                if (e3 || !v2) return;
+                const got = Math.round((v2.level || 0) * 100);
+                console.log("       volume Cast APRÈS : " + got + " %" +
+                  (v2.muted ? "  ⚠ TOUJOURS COUPÉ" : "") +
+                  (Math.abs((v2.level || 0) - WANT_VOL) > 0.05
+                    ? "   ⚠ la barre n'a PAS pris la valeur demandée" : "   ✓ pris en compte"));
+              });
+            }, 900);
+          });
         });
         console.log("  2/4  connecté — lancement du récepteur…");
         client.launch(Receiver, function (err, receiver) {
@@ -196,6 +208,7 @@ function check(host, holdSec) {
               // serait exactement l'échec silencieux qu'on cherche à éviter —
               // on INTERROGE donc la barre jusqu'à la voir vraiment lire.
               const seen = [];
+              const posSeen = [];
               let tries = 0;
               const poll = setInterval(function () {
                 tries++;
@@ -203,8 +216,10 @@ function check(host, holdSec) {
                   const s = (st && st.playerState) || (e3 ? "erreur" : "?");
                   if (seen[seen.length - 1] !== s) seen.push(s);
                   const reason = st && st.idleReason;
+                  const pos = st && typeof st.currentTime === "number" ? st.currentTime : null;
+                  if (pos !== null) posSeen.push(pos.toFixed(1));
                   const playing = s === "PLAYING" || s === "BUFFERING";
-                  if ((playing && fetched > 0) || (s === "IDLE" && reason) || tries >= 40) {
+                  if ((playing && fetched > 0 && posSeen.length >= 5) || (s === "IDLE" && reason) || tries >= 40) {
                     clearInterval(poll);
                     console.log("  4/4  états observés : " + seen.join(" → ") +
                                 (reason ? "  (motif : " + reason + ")" : ""));
@@ -212,6 +227,8 @@ function check(host, holdSec) {
                       (fetched ? "OUI, " + Math.round(fetchedBytes/1024) + " Ko depuis " + fetchedFrom
                                : "NON — elle n'est jamais venue le chercher"));
                     try { receiver.stop(function () {}); } catch (e) {}
+                    console.log("       position de lecture : " +
+                      (posSeen.length ? posSeen.slice(0,6).join(" s → ") + " s" : "non rapportée"));
                     console.log("       lecture maintenue " + (HOLD/1000) + " s pour laisser la barre se reveiller…");
                     setTimeout(() => done((playing && fetched > 0)
                       ? { ok: true, states: seen, kb: Math.round(fetchedBytes/1024) }
@@ -276,12 +293,17 @@ async function send(host) {
     console.log("");
     line();
     if (r.ok) {
-      console.log("  ✅ CHAÎNE COMPLÈTE VALIDÉE — la barre a atteint l'état PLAYING.");
+      console.log("  ◐ PROTOCOLE VALIDÉ — mais le SON n'est pas prouvé.");
       console.log("     États traversés : " + (r.states || []).join(" → "));
       console.log("");
-      console.log("     ⚠️ Ceci prouve que la barre a ACCEPTÉ et LANCÉ la lecture.");
-      console.log("     Que le son soit réellement sorti se vérifie avec l'oreille,");
-      console.log("     et avec le volume de la barre.");
+      console.log("     Ce qui est établi : la barre est jointe, elle a téléchargé");
+      console.log("     le fichier, et sa position de lecture avance — donc elle");
+      console.log("     décode vraiment l'audio.");
+      console.log("");
+      console.log("     Ce qui NE l'est PAS : qu'un son sorte des haut-parleurs.");
+      console.log("     Cela dépend du volume MAÎTRE de la barre (distinct du volume");
+      console.log("     Cast), de son mode, et du fait qu'elle soit allumée.");
+      console.log("     Seule l'oreille tranche. Aucun ✅ ne peut le remplacer.");
     } else {
       console.log("  ❌ ÉCHEC à l'étape « " + r.step + " » : " + r.error);
       if (r.states) console.log("     États traversés : " + r.states.join(" → "));

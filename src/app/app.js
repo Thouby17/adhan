@@ -839,6 +839,7 @@
     dom.setAsr.value = cfg.asrMethod;
     dom.setHigh.value = cfg.highLats;
     dom.setReminder.value = String(cfg.reminderMinutes);
+    dom.setVolume.value = (cfg.castMinVolume === null ? "null" : String(cfg.castMinVolume));
     const on = cfg.prayersWithAdhan || [];
     dom.setPrayers.querySelectorAll("input").forEach(i => { i.checked = on.indexOf(i.value) !== -1; });
     dom.setStore.textContent = (store === "service")
@@ -858,6 +859,7 @@
       fajrAngle: num(dom.setFajr), ishaAngle: num(dom.setIsha),
       asrMethod: dom.setAsr.value, highLats: dom.setHigh.value,
       reminderMinutes: Number(dom.setReminder.value),
+      castMinVolume: dom.setVolume.value === "null" ? null : Number(dom.setVolume.value),
       prayersWithAdhan: on
     };
   }
@@ -966,7 +968,7 @@
     dom.setPrayers = g("set-prayers"); dom.setPlace = g("set-place");
     dom.setLat = g("set-lat"); dom.setLng = g("set-lng");
     dom.setFajr = g("set-fajr-angle"); dom.setIsha = g("set-isha-angle");
-    dom.setAsr = g("set-asr"); dom.setHigh = g("set-highlats");
+    dom.setAsr = g("set-asr"); dom.setHigh = g("set-highlats"); dom.setVolume = g("set-volume");
     dom.setPreview = g("set-preview"); dom.setErrors = g("set-errors"); dom.setStore = g("set-store");
     dom.btnLocate = g("btn-locate");
     dom.tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
