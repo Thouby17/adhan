@@ -27,3 +27,12 @@ adhan-fired.json
 android-app/android/app/src/main/assets/public/
 android-app/android/app/src/main/assets/capacitor.config.json
 android-app/android/app/src/main/assets/capacitor.plugins.json
+
+# ⛔ Clé de signature — elle vit dans F:\Claude\adhan-secrets\ et NULLE PART
+# ici : ce dépôt est public. Ces motifs sont une ceinture de sécurité au cas
+# où un fichier atterrirait dans l'arborescence par mégarde.
+*.p12
+*.jks
+*.keystore
+*.p12.base64
+.motdepasse.txt

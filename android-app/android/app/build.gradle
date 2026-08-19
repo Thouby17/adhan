@@ -7,8 +7,11 @@ android {
         applicationId "be.thoubaine.adhan"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // ⚠️ versionCode doit AUGMENTER a chaque version publiee : Android
+        // refuse d'installer une version dont le numero est inferieur ou egal
+        // a celui deja en place. C'est le seul numero qu il regarde.
+        versionCode 2
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Les bibliothèques AndroidX embarquent leurs traductions dans une
@@ -21,6 +24,24 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // La cle permanente arrive par variables d environnement, jamais par un
+    // fichier du depot : celui-ci est PUBLIC. Si elles sont absentes (build
+    // sur une machine sans la cle), on retombe sur la signature de debogage
+    // plutot que d echouer.
+    signingConfigs {
+        permanente {
+            def chemin = System.getenv("ANDROID_KEYSTORE_FILE")
+            if (chemin != null && file(chemin).exists()) {
+                storeFile file(chemin)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                // PKCS12 n a qu un seul mot de passe, pour le magasin ET la cle.
+                keyPassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                storeType "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         // R8 supprime le code jamais appele. Le gros du poids vient des
         // bibliotheques AndroidX, dont on n utilise qu une fraction.
@@ -28,6 +49,12 @@ android {
         // reflexion : sans ces regles, l application s ouvrirait normalement
         // et le pont natif repondrait 'methode inconnue'.
         release {
+            // Signee par la cle permanente si elle est fournie. C est ce qui
+            // permet aux mises a jour de s installer PAR-DESSUS, sans
+            // desinstaller ni perdre les reglages et le suivi des prieres.
+            if (System.getenv("ANDROID_KEYSTORE_FILE") != null) {
+                signingConfig signingConfigs.permanente
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

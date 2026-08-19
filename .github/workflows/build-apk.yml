@@ -55,16 +55,45 @@ jobs:
         working-directory: android-app
         run: npx cap sync android
 
-      - name: Construire l'APK
+      # La clé est reconstituée depuis le secret, utilisée, puis oubliée avec
+      # la machine éphémère. Elle ne transite par aucun fichier du dépôt.
+      - name: Reconstituer la clé de signature
+        env:
+          CLE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$CLE" ]; then
+            echo "::error::Le secret ANDROID_KEYSTORE_BASE64 est absent."
+            echo "Sans lui l'APK serait signée par une clé de débogage jetable,"
+            echo "et ne pourrait pas remplacer la version déjà installée."
+            exit 1
+          fi
+          echo "$CLE" | base64 -d > "$RUNNER_TEMP/adhan-release.p12"
+          echo "magasin reconstitué : $(stat -c%s "$RUNNER_TEMP/adhan-release.p12") octets"
+
+      - name: Construire l APK
         working-directory: android-app/android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/adhan-release.p12
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Renommer
+      # ⚠️ Gradle nomme le fichier « app-release-unsigned.apk » quand la
+      # signature a échoué. Livrer ce fichier-là serait pire que de ne rien
+      # livrer : il s'installe, puis refuse toute mise à jour ultérieure.
+      - name: Vérifier que l'APK est bien signée
         run: |
+          DOSSIER=android-app/android/app/build/outputs/apk/release
+          ls -l "$DOSSIER"
+          if [ -f "$DOSSIER/app-release-unsigned.apk" ]; then
+            echo "::error::APK NON SIGNÉE — la clé permanente n'a pas été prise en compte."
+            exit 1
+          fi
+          test -f "$DOSSIER/app-release.apk" || { echo "::error::aucune APK produite"; exit 1; }
           mkdir -p out
-          cp android-app/android/app/build/outputs/apk/debug/app-debug.apk out/adhan.apk
+          cp "$DOSSIER/app-release.apk" out/adhan.apk
           ls -lh out/
 
       - uses: actions/upload-artifact@v4
