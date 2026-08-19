@@ -16,6 +16,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Les tests portent sur l'heure BELGE (changements d'heure, nuits d'été de
+# Bruxelles). La machine de GitHub tourne en UTC : sans ce réglage, huit tests
+# échouent pour une raison qui n'a rien à voir avec le code.
+env:
+  TZ: Europe/Brussels
+
 jobs:
   build:
     runs-on: ubuntu-latest

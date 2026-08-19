@@ -163,8 +163,31 @@ const stamp = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, 
   String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 
 // =====================================================================
+// ⚠️ CES TESTS PORTENT SUR L'HEURE BELGE. Ils rejouent les deux dimanches de
+// changement d'heure et les nuits d'été de Bruxelles — donc ils DOIVENT
+// tourner en Europe/Brussels. Sur une machine en UTC (celle de GitHub, par
+// exemple), huit d'entre eux échouent pour une raison qui n'a rien à voir
+// avec le code. Mieux vaut un message clair qu'une liste d'échecs trompeuse.
+const TZ_ATTENDU = "Europe/Brussels";
+const TZ_REEL = Intl.DateTimeFormat().resolvedOptions().timeZone;
+if (TZ_REEL !== TZ_ATTENDU) {
+  console.error("");
+  console.error("FUSEAU HORAIRE INCORRECT");
+  console.error("-".repeat(56));
+  console.error("  attendu : " + TZ_ATTENDU);
+  console.error("  obtenu  : " + TZ_REEL);
+  console.error("");
+  console.error("  Ces tests vérifient les changements d'heure et les nuits");
+  console.error("  d'été de Bruxelles : ils n'ont de sens que dans ce fuseau.");
+  console.error("");
+  console.error("  Relancer avec :   TZ=Europe/Brussels npm test");
+  console.error("  (sous PowerShell : $env:TZ='Europe/Brussels'; npm test)");
+  console.error("");
+  process.exit(1);
+}
+
 console.log("Adhan TV — tests");
-console.log("Fuseau de la machine : " + Intl.DateTimeFormat().resolvedOptions().timeZone);
+console.log("Fuseau de la machine : " + TZ_REEL);
 console.log("Réglages testés : " + OPTS.fajrAngle + "°/" + OPTS.ishaAngle +
             "°, hautes latitudes = " + OPTS.highLats + ", Asr = " + CONFIG.asrMethod);
 
