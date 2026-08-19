@@ -23,7 +23,14 @@ const target = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a));
 const scanIdx = args.indexOf("--scan");
 const scanSeconds = scanIdx >= 0 ? Number(args[scanIdx + 1]) || 12 : 12;
 const volIdx = args.indexOf("--volume");
-const WANT_VOL = Math.min(1, Math.max(0, (volIdx >= 0 ? Number(args[volIdx + 1]) : 70) / 100));
+const WANT_VOL = volIdx >= 0 ? Math.min(1, Math.max(0, Number(args[volIdx + 1]) / 100)) : null;
+// ⚠️ LEÇON APPRISE À LA DURE. La barre annonce controlType:"master" : le
+// volume Cast EST son volume maître. Imposer une valeur ne « monte » donc
+// rien — ça ÉCRASE le réglage de l'utilisateur, et un test à 30 % a rendu
+// l'adhan inaudible alors que tout le protocole était vert.
+// Par défaut, ce test se comporte donc comme pi/player.js : un PLANCHER,
+// qui ne remonte que si c'est trop bas. --volume N force, pour calibrer.
+const FLOOR = CONFIG.castMinVolume === undefined ? 0.3 : CONFIG.castMinVolume;
 
 function line() { console.log("-".repeat(64)); }
 
@@ -175,8 +182,20 @@ function check(host, holdSec) {
           if (ev || !vol) { console.log("       volume illisible : " + (ev && ev.message)); return; }
           console.log("       volume Cast AVANT : " + Math.round((vol.level || 0) * 100) + " %" +
             (vol.muted ? "  ⚠ COUPÉ (mute)" : ""));
-          console.log("       → on impose " + Math.round(WANT_VOL * 100) + " %");
-          client.setVolume({ level: WANT_VOL, muted: false }, function (e2) {
+          const cur = vol.level || 0;
+          let target = null;
+          if (WANT_VOL !== null) {
+            target = WANT_VOL;
+            console.log("       → --volume : on FORCE " + Math.round(target * 100) + " %");
+          } else if (FLOOR !== null && (vol.muted || cur < FLOOR)) {
+            target = FLOOR;
+            console.log("       → sous le plancher : on remonte à " + Math.round(target * 100) + " %");
+          } else {
+            console.log("       → au-dessus du plancher (" + Math.round(FLOOR * 100) +
+                        " %) : on n'y touche pas");
+            return;
+          }
+          client.setVolume({ level: target, muted: false }, function (e2) {
             // On RELIT après avoir écrit : « pas d'erreur » ne prouve pas que
             // la barre a obéi. C'est la vérification d'état, pas d'absence
             // d'erreur — la même règle qui a démasqué le IDLE de tout à l'heure.
@@ -186,7 +205,7 @@ function check(host, holdSec) {
                 const got = Math.round((v2.level || 0) * 100);
                 console.log("       volume Cast APRÈS : " + got + " %" +
                   (v2.muted ? "  ⚠ TOUJOURS COUPÉ" : "") +
-                  (Math.abs((v2.level || 0) - WANT_VOL) > 0.05
+                  (Math.abs((v2.level || 0) - target) > 0.05
                     ? "   ⚠ la barre n'a PAS pris la valeur demandée" : "   ✓ pris en compte"));
               });
             }, 900);
