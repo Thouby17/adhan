@@ -717,3 +717,15 @@ input:focus-visible, select:focus-visible {
   padding: 7px 12px; border-radius: 8px; font-size: .85rem; font-weight: 600;
   background: var(--accent, #f0b429); color: #1b1b1f;
 }
+
+/* ---------- Recherche et essai de la barre de son ---------------------- */
+.set-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.set-actions button {
+  flex: 1 1 auto; min-width: 150px; cursor: pointer; border: 0;
+  padding: 11px 14px; border-radius: 10px; font-size: .9rem; font-weight: 600;
+  background: var(--surface-3, rgba(255,255,255,.08)); color: var(--text, #e8eaf2);
+}
+.set-actions button:disabled { opacity: .55; cursor: progress; }
+#cast-etat:empty { display: none; }
+#cast-etat.ok  { color: var(--ok, #35c26b); }
+#cast-etat.ko  { color: var(--warn, #e8a33d); }

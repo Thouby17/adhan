@@ -98,6 +98,10 @@ public class AdhanPlugin extends Plugin {
         }
         r.put("prochaineAlarme", prochaine);
         r.put("prochainePriere", priere);
+        r.put("sortie", Reglages.sortie(ctx));
+        r.put("hote", Reglages.hote(ctx) == null ? "" : Reglages.hote(ctx));
+        r.put("hoteTrouve", Reglages.hoteTrouve(ctx) == null ? "" : Reglages.hoteTrouve(ctx));
+        r.put("adresseTablette", MediaHost.adresseLocale() == null ? "" : MediaHost.adresseLocale());
 
         call.resolve(r);
     }
@@ -120,6 +124,13 @@ public class AdhanPlugin extends Plugin {
             AdhanAlarms.desarmer(ctx);
             AdhanAlarms.enregistrer(ctx, alarmes);
             final int armees = AdhanAlarms.armer(ctx);
+
+            // A 5 h du matin le service joue sans page chargee : il ne pourra
+            // rien lui demander. Elle depose donc ici ce dont il aura besoin.
+            Reglages.ecrire(ctx,
+                call.getString("sortie", "local"),
+                call.getString("hote", ""),
+                call.getDouble("plancher", 0.5d));
 
             demarrerVeilleInterne();
 
@@ -169,6 +180,50 @@ public class AdhanPlugin extends Plugin {
     public void demarrerVeille(PluginCall call) {
         demarrerVeilleInterne();
         call.resolve();
+    }
+
+    /**
+     * Cherche les appareils Cast du reseau. Appele depuis l'ecran de reglages,
+     * pour que l'utilisateur n'ait pas a connaitre l'adresse de sa barre.
+     */
+    @PluginMethod
+    public void chercherBarres(final PluginCall call) {
+        final Context ctx = getContext().getApplicationContext();
+        // La recherche dure plusieurs secondes : hors du fil principal, sans
+        // quoi l'interface se figerait pendant tout ce temps.
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final JSArray liste = new JSArray();
+                try {
+                    for (CastDiscovery.Appareil a : CastDiscovery.chercher(ctx, 6)) {
+                        liste.put(new JSObject().put("ip", a.ip).put("nom", a.nom));
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "recherche impossible : " + e.getMessage());
+                }
+                call.resolve(new JSObject().put("appareils", liste));
+            }
+        }, "adhan-recherche").start();
+    }
+
+    /** Envoie l'adhan a la barre tout de suite, pour verifier l'installation. */
+    @PluginMethod
+    public void testerBarre(final PluginCall call) {
+        final Context ctx = getContext().getApplicationContext();
+        final String hote = call.getString("hote", Reglages.hote(ctx));
+        if (hote == null || hote.trim().length() == 0) {
+            call.reject("Aucune adresse de barre. Lancez d'abord une recherche.");
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final CastSender.Resultat r =
+                    CastSender.jouer(ctx, hote.trim(), Reglages.plancher(ctx));
+                call.resolve(new JSObject()
+                    .put("ok", r.ok)
+                    .put("detail", r.detail == null ? "" : r.detail));
+            }
+        }, "adhan-test-barre").start();
     }
 
     // -----------------------------------------------------------------

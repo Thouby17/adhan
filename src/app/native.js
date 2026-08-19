@@ -58,7 +58,7 @@
    * @param {Function} timesFor  jour → { fajr: Date, dhuhr: Date, ... }
    * @param {Array}    prieres   celles qui doivent sonner
    */
-  function programmer(timesFor, prieres, jours) {
+  function programmer(timesFor, prieres, jours, audio) {
     if (!dispo) return Promise.reject(new Error("Pont natif absent."));
 
     const alarms = [];
@@ -85,7 +85,16 @@
     }
 
     alarms.sort((a, b) => a.at - b.at);
-    return appel("programmer", { alarms: alarms })
+    // Les réglages audio partent AVEC les alarmes, pas séparément : le
+    // service doit pouvoir jouer sans page chargée, et une programmation
+    // sans réglages le laisserait muet ou sur le mauvais haut-parleur.
+    const a = audio || {};
+    return appel("programmer", {
+      alarms: alarms,
+      sortie: a.sortie || "local",
+      hote: a.hote || "",
+      plancher: (a.plancher === null || a.plancher === undefined) ? -1 : a.plancher
+    })
       .then(r => Object.assign({ envoyees: alarms.length }, r || {}));
   }
 
@@ -105,6 +114,8 @@
     demanderNotifications: function () { return appel("demanderNotifications"); },
     demanderExemptionBatterie: function () { return appel("demanderExemptionBatterie"); },
     ouvrirReglagesAlarmes: function () { return appel("ouvrirReglagesAlarmes"); },
+    chercherBarres: function () { return appel("chercherBarres"); },
+    testerBarre: function (hote) { return appel("testerBarre", { hote: hote || "" }); },
     ecouter: ecouter
   };
 })(typeof self !== "undefined" ? self : this);

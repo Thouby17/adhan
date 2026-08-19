@@ -200,6 +200,34 @@
           </fieldset>
 
           <fieldset class="set-group">
+            <legend>Où sort l'adhan</legend>
+            <div class="set-row w-sm">
+              <label for="set-output">Haut-parleur</label>
+              <select id="set-output">
+                <option value="local">La tablette elle-même</option>
+                <option value="cast">La barre de son (Wi-Fi)</option>
+                <option value="both">Les deux</option>
+              </select>
+            </div>
+            <p class="set-help">
+              Par le Wi-Fi, la barre <strong>se réveille toute seule</strong> et
+              bascule sur la bonne entrée, même en pleine nuit. Si elle ne
+              répond pas, l'adhan sort du haut-parleur de la tablette plutôt
+              que de nulle part.
+            </p>
+            <div class="set-row" id="row-casthost">
+              <label for="set-casthost">Adresse de la barre</label>
+              <input id="set-casthost" type="text" inputmode="text"
+                     placeholder="192.168.1.32" autocomplete="off">
+            </div>
+            <div class="set-actions">
+              <button type="button" id="btn-chercher-barre">Chercher ma barre</button>
+              <button type="button" id="btn-tester-barre">Envoyer un adhan d'essai</button>
+            </div>
+            <p class="set-help" id="cast-etat"></p>
+          </fieldset>
+
+          <fieldset class="set-group">
             <legend>Volume minimum de la barre</legend>
             <p class="set-help">
               Si la barre est laissée très bas, l'adhan passe inaperçu : elle

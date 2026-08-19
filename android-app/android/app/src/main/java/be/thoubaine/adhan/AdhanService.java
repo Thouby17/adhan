@@ -14,6 +14,8 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
 
@@ -94,8 +96,83 @@ public class AdhanService extends Service {
     // ---------------------------------------------------------------------
     // Lecture
     // ---------------------------------------------------------------------
+    /**
+     * Aiguillage entre la barre de son et le haut-parleur de la tablette.
+     *
+     * REGLE INTANGIBLE : on ne rentre JAMAIS bredouille. Si la barre ne
+     * repond pas, si le reseau est tombe, si l'adresse a change — on bascule
+     * sur le haut-parleur local. Un adhan sur la tablette vaut infiniment
+     * mieux qu'un adhan nulle part, et l'utilisateur ne peut pas deviner
+     * qu'il aurait du en entendre un.
+     */
     private void jouer(String enCours) {
         arreterLecture();
+        priereEnCours = enCours;
+        AdhanPlugin.diffuser(enCours, true);
+
+        final String sortie = Reglages.sortie(this);
+        if (Reglages.SORTIE_CAST.equals(sortie) || Reglages.SORTIE_DEUX.equals(sortie)) {
+            lancerCast(Reglages.SORTIE_DEUX.equals(sortie));
+            return;
+        }
+        jouerLocal();
+    }
+
+    private void lancerCast(final boolean aussiEnLocal) {
+        if (aussiEnLocal) jouerLocal();
+        final Context ctx = getApplicationContext();
+        final Thread t = new Thread(new Runnable() {
+            @Override public void run() {
+                String hote = Reglages.hote(ctx);
+                CastSender.Resultat r = null;
+
+                if (hote != null) r = CastSender.jouer(ctx, hote, Reglages.plancher(ctx));
+
+                // L'adresse enregistree ne repond pas : la box a pu en
+                // distribuer une autre. On cherche avant d'abandonner.
+                if (r == null || !r.ok) {
+                    final String appris = Reglages.hoteTrouve(ctx);
+                    if (appris != null && !appris.equals(hote)) {
+                        r = CastSender.jouer(ctx, appris, Reglages.plancher(ctx));
+                        if (r.ok) hote = appris;
+                    }
+                }
+                if (r == null || !r.ok) {
+                    for (CastDiscovery.Appareil a : CastDiscovery.chercher(ctx, 6)) {
+                        r = CastSender.jouer(ctx, a.ip, Reglages.plancher(ctx));
+                        if (r.ok) {
+                            Reglages.memoriserHoteTrouve(ctx, a.ip);
+                            Log.i(TAG, "barre retrouvee a " + a.ip + " (" + a.nom + ")");
+                            hote = a.ip;
+                            break;
+                        }
+                    }
+                }
+
+                final boolean ok = r != null && r.ok;
+                Log.i(TAG, "Cast : " + (ok ? "réussi" : "echoue")
+                         + (r == null ? "" : " — " + r.detail));
+
+                if (!ok && !aussiEnLocal) {
+                    // Repli, sur le fil principal : MediaPlayer a besoin d'une
+                    // boucle de messages pour ses rappels.
+                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                        @Override public void run() { jouerLocal(); }
+                    });
+                } else {
+                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                        @Override public void run() {
+                            if (player == null) { arreterLecture(); stopForeground(true); stopSelf(); }
+                        }
+                    });
+                }
+            }
+        }, "adhan-cast");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void jouerLocal() {
         try {
             final AssetFileDescriptor afd =
                 getAssets().openFd("public/audio/adhan.mp3");
@@ -132,9 +209,7 @@ public class AdhanService extends Service {
             });
             player.prepare();
             player.start();
-            priereEnCours = enCours;
-            AdhanPlugin.diffuser(enCours, true);
-            Log.i(TAG, "adhan demarre");
+            Log.i(TAG, "adhan demarre sur le haut-parleur local");
         } catch (Exception e) {
             Log.e(TAG, "lecture impossible : " + e.getMessage(), e);
         }

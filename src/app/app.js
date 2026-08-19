@@ -145,7 +145,11 @@
   // une coute une priere manquee, sans le moindre signe a l'ecran.
   function programmerNatif() {
     if (!natif()) return;
-    N.programmer(timesFor, cfg.prayersWithAdhan, 7)
+    N.programmer(timesFor, cfg.prayersWithAdhan, 7, {
+      sortie: cfg.audioOutput,
+      hote: cfg.castHost || "",
+      plancher: cfg.castMinVolume
+    })
       .then(r => log("Alarmes Android : " + r.armees + " armées sur " + r.envoyees + " envoyées"))
       .catch(e => log("⚠ Programmation Android impossible : " + e.message));
   }
@@ -868,6 +872,9 @@
     dom.setHigh.value = cfg.highLats;
     dom.setReminder.value = String(cfg.reminderMinutes);
     dom.setVolume.value = (cfg.castMinVolume === null ? "null" : String(cfg.castMinVolume));
+    dom.setOutput.value = cfg.audioOutput || "local";
+    dom.setCastHost.value = cfg.castHost || "";
+    majLigneBarre();
     const on = cfg.prayersWithAdhan || [];
     dom.setPrayers.querySelectorAll("input").forEach(i => { i.checked = on.indexOf(i.value) !== -1; });
     dom.setStore.textContent = (store === "service")
@@ -888,6 +895,8 @@
       asrMethod: dom.setAsr.value, highLats: dom.setHigh.value,
       reminderMinutes: Number(dom.setReminder.value),
       castMinVolume: dom.setVolume.value === "null" ? null : Number(dom.setVolume.value),
+      audioOutput: dom.setOutput.value,
+      castHost: dom.setCastHost.value.trim() || null,
       prayersWithAdhan: on
     };
   }
@@ -997,6 +1006,7 @@
     dom.setLat = g("set-lat"); dom.setLng = g("set-lng");
     dom.setFajr = g("set-fajr-angle"); dom.setIsha = g("set-isha-angle");
     dom.setAsr = g("set-asr"); dom.setHigh = g("set-highlats"); dom.setVolume = g("set-volume");
+    dom.setOutput = g("set-output"); dom.setCastHost = g("set-casthost");
     dom.setPreview = g("set-preview"); dom.setErrors = g("set-errors"); dom.setStore = g("set-store");
     dom.btnLocate = g("btn-locate");
     dom.tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
@@ -1045,6 +1055,7 @@
           cfg.latitude + "/" + cfg.longitude + " · " +
           PT_OPTS.fajrAngle + "°/" + PT_OPTS.ishaAngle + "° · " + PT_OPTS.highLats);
       refreshDailyCache();
+      brancherBoutonsBarre();
       brancherNatif();
       if (params.mode === "alarm" && params.prayer) {
         switchToAlarm(params.prayer, false);
@@ -1100,6 +1111,68 @@
       if (!document.hidden) rafraichirDiagnostic();
     });
     rafraichirDiagnostic();
+  }
+
+  // ---------- Barre de son ----------------------------------------------
+  function majLigneBarre() {
+    const row = document.getElementById("row-casthost");
+    const act = document.querySelector(".set-actions");
+    // L'adresse et l'essai n'ont aucun sens si le son sort de la tablette.
+    const utile = dom.setOutput && dom.setOutput.value !== "local";
+    if (row) row.classList.toggle("hidden", !utile);
+    if (act) act.classList.toggle("hidden", !utile);
+  }
+
+  function etatBarre(txt, ok) {
+    const el = document.getElementById("cast-etat");
+    if (!el) return;
+    el.textContent = txt || "";
+    el.classList.toggle("ok", ok === true);
+    el.classList.toggle("ko", ok === false);
+  }
+
+  function brancherBoutonsBarre() {
+    const chercher = document.getElementById("btn-chercher-barre");
+    const tester = document.getElementById("btn-tester-barre");
+    if (!chercher || !tester) return;
+
+    if (dom.setOutput) dom.setOutput.addEventListener("change", majLigneBarre);
+
+    chercher.addEventListener("click", function () {
+      if (!natif()) { etatBarre("La recherche n'existe que dans l'application Android.", false); return; }
+      chercher.disabled = true;
+      etatBarre("Recherche en cours sur le réseau… (6 secondes)");
+      N.chercherBarres().then(function (r) {
+        const l = (r && r.appareils) || [];
+        if (!l.length) {
+          etatBarre("Aucun appareil trouvé. Vérifiez que la tablette et la barre "
+                  + "sont sur le MÊME réseau Wi-Fi — c'est la cause la plus fréquente.", false);
+        } else {
+          dom.setCastHost.value = l[0].ip;
+          etatBarre(l.length + " appareil(s) trouvé(s). Retenu : "
+                  + (l[0].nom || "sans nom") + " (" + l[0].ip + "). "
+                  + "Enregistrez, puis envoyez un adhan d'essai.", true);
+        }
+      }).catch(e => etatBarre("Recherche impossible : " + e.message, false))
+        .then(() => { chercher.disabled = false; });
+    });
+
+    tester.addEventListener("click", function () {
+      if (!natif()) { etatBarre("L'essai n'existe que dans l'application Android.", false); return; }
+      const hote = dom.setCastHost.value.trim();
+      if (!hote) { etatBarre("Indiquez d'abord une adresse, ou lancez une recherche.", false); return; }
+      tester.disabled = true;
+      etatBarre("Envoi à " + hote + "… la barre peut mettre 2 secondes à se réveiller.");
+      N.testerBarre(hote).then(function (r) {
+        // ⚠️ « Aucune erreur » ne prouve pas qu'on a entendu quelque chose :
+        // c'est exactement le piège qui a coûté une soirée de diagnostic.
+        etatBarre(r && r.ok
+          ? "La barre a téléchargé le fichier et l'a joué. Si vous n'avez rien "
+            + "entendu, montez son volume : le reste de la chaîne est prouvé."
+          : "Échec : " + ((r && r.detail) || "la barre n'a pas répondu"), !!(r && r.ok));
+      }).catch(e => etatBarre("Essai impossible : " + e.message, false))
+        .then(() => { tester.disabled = false; });
+    });
   }
 
   function rafraichirDiagnostic() {
