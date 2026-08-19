@@ -4,7 +4,7 @@ const http = require("http"), fs = require("fs"), path = require("path");
 const PROJ = path.join(__dirname, "..");
 const ROOT = path.join(PROJ, "src", "app");
 const TYPES = { ".html":"text/html", ".js":"application/javascript",
-                ".css":"text/css", ".mp3":"audio/mpeg", ".png":"image/png" };
+                ".css":"text/css", ".mp3":"audio/mpeg", ".m4a":"audio/mp4", ".png":"image/png" };
 http.createServer(function (req, res) {
   const rel = decodeURIComponent(req.url.split("?")[0]);
   let file = path.join(ROOT, rel === "/" ? "index.html" : rel);

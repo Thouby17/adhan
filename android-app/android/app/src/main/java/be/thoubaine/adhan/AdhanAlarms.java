@@ -146,6 +146,46 @@ public final class AdhanAlarms {
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
+    /**
+     * Une alarme d'essai, dans quelques minutes.
+     *
+     * Elle emprunte EXACTEMENT le meme chemin qu'une vraie priere :
+     * AlarmManager, puis AlarmReceiver, puis le service. Un bouton qui
+     * appellerait directement le service ne prouverait rien du reveil de
+     * l'appareil ecran eteint — or c'est precisement ce qu'on veut verifier,
+     * et c'est la seule chose qu'on ne peut pas verifier autrement qu'en
+     * attendant 5 h du matin.
+     *
+     * Code de requete a part (999999) : elle ne doit ni ecraser une priere
+     * armee, ni etre effacee par la prochaine reprogrammation.
+     */
+    public static boolean armerEssai(Context ctx, int minutes) {
+        final AlarmManager am =
+            (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return false;
+        final long quand = System.currentTimeMillis() + Math.max(1, minutes) * 60000L;
+
+        final Intent i = new Intent(ctx, AlarmReceiver.class)
+            .setAction("be.thoubaine.adhan.ESSAI")
+            .putExtra(AdhanService.EXTRA_PRIERE, "test")
+            .putExtra("at", quand);
+        final PendingIntent pi = PendingIntent.getBroadcast(
+            ctx, 999999, i,
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        try {
+            final PendingIntent voir = PendingIntent.getActivity(
+                ctx, 999998, new Intent(ctx, MainActivity.class),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            am.setAlarmClock(new AlarmManager.AlarmClockInfo(quand, voir), pi);
+            Log.i(TAG, "alarme d'essai dans " + minutes + " min");
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "essai non arme : " + e.getMessage());
+            return false;
+        }
+    }
+
     /** Combien d'alarmes enregistrees sont encore dans le futur. */
     public static int restantes(Context ctx) {
         final JSONArray liste = lire(ctx);

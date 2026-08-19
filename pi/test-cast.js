@@ -16,7 +16,12 @@ const fs = require("fs");
 
 const ROOT = path.join(__dirname, "..");
 const CONFIG = require(path.join(ROOT, "src", "app", "config.js"));
-const AUDIO = path.join(ROOT, "src", "app", CONFIG.adhanFile);
+const fIdx = process.argv.indexOf("--fichier");
+// Permet d'essayer un AUTRE encodage sur la vraie barre avant de l'adopter :
+// « la barre supporte sûrement l'AAC » est une supposition, pas une mesure.
+const AUDIO = fIdx >= 0
+  ? process.argv[fIdx + 1]
+  : path.join(ROOT, "src", "app", CONFIG.adhanFile);
 
 const args = process.argv.slice(2);
 const target = args.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a));
@@ -147,7 +152,7 @@ function check(host, holdSec) {
       fetchedFrom = req.socket.remoteAddress;
       console.log("      ← la barre demande le fichier (" + fetchedFrom + ")");
       const st = fsm.statSync(AUDIO);
-      res.writeHead(200, { "Content-Type": "audio/mpeg", "Content-Length": st.size,
+      res.writeHead(200, { "Content-Type": /.m4a$|.mp4$/.test(AUDIO) ? "audio/mp4" : "audio/mpeg", "Content-Length": st.size,
                            "Accept-Ranges": "bytes" });
       const rs = fsm.createReadStream(AUDIO);
       rs.on("data", c => { fetchedBytes += c.length; });
@@ -215,7 +220,7 @@ function check(host, holdSec) {
         client.launch(Receiver, function (err, receiver) {
           if (err) { clearTimeout(timer); return done({ ok: false, step: "récepteur", error: err.message }); }
           console.log("  3/4  récepteur lancé — envoi du média…");
-          receiver.load({ contentId: url, contentType: "audio/mpeg", streamType: "BUFFERED",
+          receiver.load({ contentId: url, contentType: /.m4a$|.mp4$/.test(AUDIO) ? "audio/mp4" : "audio/mpeg", streamType: "BUFFERED",
                           metadata: { type: 0, metadataType: 0, title: "Adhan — test" } },
                         { autoplay: true },
             function (err2, status) {

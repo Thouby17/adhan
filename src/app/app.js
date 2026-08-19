@@ -1110,6 +1110,7 @@
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) rafraichirDiagnostic();
     });
+    brancherTestReveil();
     rafraichirDiagnostic();
   }
 
@@ -1172,6 +1173,32 @@
           : "Échec : " + ((r && r.detail) || "la barre n'a pas répondu"), !!(r && r.ok));
       }).catch(e => etatBarre("Essai impossible : " + e.message, false))
         .then(() => { tester.disabled = false; });
+    });
+  }
+
+  function brancherTestReveil() {
+    const b = document.getElementById("btn-test-reveil");
+    const etat = document.getElementById("reveil-etat");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      if (!natif()) {
+        etat.textContent = "Ce test n'existe que dans l'application Android.";
+        return;
+      }
+      b.disabled = true;
+      N.testerReveil(2).then(function (r) {
+        if (r && r.ok) {
+          const t = new Date(r.quand);
+          etat.innerHTML = "<strong>Réveil programmé à " + hm(t) + ".</strong> "
+            + "Éteignez l'écran maintenant et attendez : l'écran doit se "
+            + "rallumer tout seul et l'adhan retentir. Si rien ne se passe, "
+            + "les autorisations ci-dessus sont en cause.";
+        } else {
+          etat.textContent = "Android a refusé de programmer l'alarme. "
+            + "Vérifiez la pastille « Alarmes à l'heure exacte » ci-dessus.";
+        }
+      }).catch(e => { etat.textContent = "Impossible : " + e.message; })
+        .then(() => { b.disabled = false; });
     });
   }
 

@@ -116,6 +116,7 @@
     ouvrirReglagesAlarmes: function () { return appel("ouvrirReglagesAlarmes"); },
     chercherBarres: function () { return appel("chercherBarres"); },
     testerBarre: function (hote) { return appel("testerBarre", { hote: hote || "" }); },
+    testerReveil: function (min) { return appel("testerReveil", { minutes: min || 2 }); },
     ecouter: ecouter
   };
 })(typeof self !== "undefined" ? self : this);

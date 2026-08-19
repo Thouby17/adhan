@@ -175,7 +175,7 @@ public class AdhanService extends Service {
     private void jouerLocal() {
         try {
             final AssetFileDescriptor afd =
-                getAssets().openFd("public/audio/adhan.mp3");
+                getAssets().openFd(MediaHost.RESSOURCE);
 
             player = new MediaPlayer();
             // USAGE_MEDIA et non USAGE_ALARM : le flux alarme ne part pas

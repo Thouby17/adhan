@@ -23,7 +23,7 @@ if (!fs.existsSync(audioPath)) {
   process.exit(1);
 }
 const audioB64 = fs.readFileSync(audioPath).toString("base64");
-const audioURI = "data:audio/mpeg;base64," + audioB64;
+const audioURI = "data:" + S.mimeAudio(CONFIG.adhanFile) + ";base64," + audioB64;
 
 // Le corps de index.html, sans les balises <script> (on les réinjecte inline)
 // et sans la ligne webOSTV.js (inutile hors TV).

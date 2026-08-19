@@ -31,7 +31,27 @@ import java.util.Locale;
 final class MediaHost {
 
     private static final String TAG = "MediaHost";
-    private static final String CHEMIN = "/adhan.mp3";
+    /**
+     * LE point unique, cote Java, du fichier audio.
+     *
+     * Il doit rester identique a "adhanFile" dans src/app/config.js. Ce n'est
+     * pas laisse a la vigilance : npm test compare les deux et echoue s'ils
+     * divergent. Sans ce garde-fou, changer d'encodage d'un seul cote
+     * laisserait l'APK chercher un fichier qui n'existe plus — et un adhan
+     * muet ne se signale jamais.
+     */
+    static final String RESSOURCE = "public/audio/adhan.m4a";
+    static final String NOM = "adhan.m4a";
+    private static final String CHEMIN = "/" + NOM;
+
+    /** Type MIME deduit du nom, pour ne le recopier nulle part. */
+    static String mime() {
+        final String f = NOM.toLowerCase(Locale.ROOT);
+        if (f.endsWith(".m4a") || f.endsWith(".mp4") || f.endsWith(".aac")) return "audio/mp4";
+        if (f.endsWith(".ogg") || f.endsWith(".opus")) return "audio/ogg";
+        if (f.endsWith(".wav")) return "audio/wav";
+        return "audio/mpeg";
+    }
 
     private ServerSocket socket;
     private Thread boucle;
@@ -137,7 +157,7 @@ final class MediaHost {
         final long longueur = fin - debut + 1;
         final StringBuilder rep = new StringBuilder();
         rep.append(partiel ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n");
-        rep.append("Content-Type: audio/mpeg\r\n");
+        rep.append("Content-Type: ").append(mime()).append("\r\n");
         rep.append("Content-Length: ").append(longueur).append("\r\n");
         rep.append("Accept-Ranges: bytes\r\n");
         if (partiel) {
@@ -195,20 +215,20 @@ final class MediaHost {
      * flux de ressource ne sait pas faire.
      */
     private static File extraire(Context ctx) throws IOException {
-        final File cible = new File(ctx.getCacheDir(), "adhan.mp3");
+        final File cible = new File(ctx.getCacheDir(), NOM);
         final AssetManager am = ctx.getAssets();
 
         // On ne recopie que si la taille differe : inutile d'ecrire 4 Mo a
         // chaque appel a la priere.
         long tailleSource = -1;
         try {
-            tailleSource = am.openFd("public/audio/adhan.mp3").getLength();
+            tailleSource = am.openFd(RESSOURCE).getLength();
         } catch (Exception ignored) {}
         if (cible.exists() && tailleSource > 0 && cible.length() == tailleSource) {
             return cible;
         }
 
-        final InputStream in = am.open("public/audio/adhan.mp3");
+        final InputStream in = am.open(RESSOURCE);
         final FileOutputStream out = new FileOutputStream(cible);
         try {
             final byte[] tampon = new byte[64 * 1024];

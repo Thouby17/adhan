@@ -10,6 +10,11 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Les bibliothèques AndroidX embarquent leurs traductions dans une
+        // cinquantaine de langues. Cette application n'existe qu'en français.
+        resConfigs "fr", "en"
+
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -17,10 +22,33 @@ android {
         }
     }
     buildTypes {
+        // R8 supprime le code jamais appele. Le gros du poids vient des
+        // bibliotheques AndroidX, dont on n utilise qu une fraction.
+        // proguard-rules.pro protege tout ce que Capacitor appelle par
+        // reflexion : sans ces regles, l application s ouvrirait normalement
+        // et le pont natif repondrait 'methode inconnue'.
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        // On applique le MEME traitement au build de test : livrer un APK
+        // reduit qu on n a jamais fait tourner reduit serait absurde. Ce qui
+        // est teste doit etre ce qui est livre.
+        debug {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    packagingOptions {
+        // Metadonnees de compilation Kotlin et licences : inutiles a
+        // l execution.
+        exclude "META-INF/*.kotlin_module"
+        exclude "META-INF/*.version"
+        exclude "DebugProbesKt.bin"
+        exclude "kotlin/**"
     }
 }
 

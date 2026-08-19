@@ -81,7 +81,7 @@
     reminderMinutes: 10,
 
     // --- Alarme -------------------------------------------------------
-    adhanFile: "audio/adhan.mp3",
+    adhanFile: "audio/adhan.m4a",
     alarmAutoCloseSeconds: 360,
 
     // --- Appareil du salon (Raspberry Pi) -----------------------------

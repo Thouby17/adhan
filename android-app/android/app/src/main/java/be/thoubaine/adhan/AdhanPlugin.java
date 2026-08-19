@@ -226,6 +226,17 @@ public class AdhanPlugin extends Plugin {
         }, "adhan-test-barre").start();
     }
 
+    @PluginMethod
+    public void testerReveil(PluginCall call) {
+        final int minutes = call.getInt("minutes", 2);
+        final boolean ok = AdhanAlarms.armerEssai(getContext(), minutes);
+        final JSObject r = new JSObject();
+        r.put("ok", ok);
+        r.put("minutes", minutes);
+        r.put("quand", System.currentTimeMillis() + minutes * 60000L);
+        call.resolve(r);
+    }
+
     // -----------------------------------------------------------------
     // Permissions
     // -----------------------------------------------------------------

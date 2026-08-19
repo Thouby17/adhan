@@ -204,6 +204,41 @@ for (const f of ["praytimes.js", "config.js", "settings.js"]) {
   });
 }
 
+// Le fichier audio est nommé à DEUX endroits qui ne peuvent pas se lire l'un
+// l'autre : config.js (JavaScript) et MediaHost.java (Android). Le passage du
+// MP3 à l'AAC a montré le risque — changer d'un seul côté laisse l'APK
+// chercher un fichier absent, et un adhan muet ne se signale JAMAIS.
+test("le fichier audio porte le même nom dans config.js et dans le code Android", function () {
+  const attendu = path.basename(CONFIG.adhanFile);
+  const java = path.join(ROOT, "android-app", "android", "app", "src", "main",
+                         "java", "be", "thoubaine", "adhan", "MediaHost.java");
+  if (!fs.existsSync(java)) return;          // pas d'APK dans ce dépôt : rien à vérifier
+  const src = fs.readFileSync(java, "utf8");
+
+  // Extraction sans expression régulière : on cherche la déclaration, puis la
+  // valeur entre guillemets. Plus lisible, et rien à échapper.
+  function constante(nom) {
+    const i = src.indexOf("String " + nom + " =");
+    if (i < 0) return null;
+    const a = src.indexOf('"', i);
+    const b = src.indexOf('"', a + 1);
+    return (a < 0 || b < 0) ? null : src.slice(a + 1, b);
+  }
+
+  const nom = constante("NOM");
+  assert(nom, "MediaHost.java ne déclare plus de constante NOM — le garde-fou est aveugle.");
+  assert(nom === attendu,
+    "Le code Android cherche « " + nom + " » alors que config.js fournit « " + attendu +
+    " ». L'APK jouerait un fichier absent, sans le moindre message.");
+
+  const ress = constante("RESSOURCE");
+  assert(ress === "public/audio/" + attendu,
+    "RESSOURCE pointe sur « " + ress + " » au lieu de « public/audio/" + attendu + " ».");
+
+  assert(fs.existsSync(path.join(ROOT, "src", "app", CONFIG.adhanFile)),
+    "Le fichier " + CONFIG.adhanFile + " n'existe pas dans src/app/.");
+});
+
 // ---------------------------------------------------------------------
 section("2. Conformité à la référence PrayTimes.org v2.5");
 // ---------------------------------------------------------------------

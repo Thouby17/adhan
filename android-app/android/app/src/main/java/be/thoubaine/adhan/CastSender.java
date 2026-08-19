@@ -155,7 +155,7 @@ final class CastSender {
 
         final JSONObject media = new JSONObject()
             .put("contentId", url)
-            .put("contentType", "audio/mpeg")
+            .put("contentType", MediaHost.mime())
             .put("streamType", "BUFFERED")
             .put("metadata", new JSONObject()
                 .put("type", 0).put("metadataType", 0).put("title", "Adhan"));

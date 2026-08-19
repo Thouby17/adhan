@@ -168,8 +168,25 @@
     return out;
   }
 
+  /**
+   * Type MIME déduit de l'extension du fichier audio.
+   *
+   * Il était recopié à ONZE endroits (serveur du Pi, chargement Cast, serveur
+   * de l'APK, fichier autonome...). Changer d'encodage obligeait à les
+   * retrouver tous, et un seul oubli suffit à rendre l'adhan muet quelque
+   * part — sans message, comme toujours ici.
+   */
+  function mimeAudio(chemin) {
+    const f = String(chemin || "").toLowerCase();
+    if (f.indexOf(".m4a") >= 0 || f.indexOf(".mp4") >= 0 || f.indexOf(".aac") >= 0) return "audio/mp4";
+    if (f.indexOf(".ogg") >= 0 || f.indexOf(".opus") >= 0) return "audio/ogg";
+    if (f.indexOf(".wav") >= 0) return "audio/wav";
+    return "audio/mpeg";
+  }
+
   return {
     PRAYERS: PRAYERS,
+    mimeAudio: mimeAudio,
     EDITABLE: EDITABLE,
     HIGH_LATS: HIGH_LATS,
     ASR: ASR,

@@ -23,6 +23,12 @@ const os = require("os");
 const path = require("path");
 const fs = require("fs");
 
+// Le type MIME est DÉDUIT du fichier, jamais recopié : il l'était à onze
+// endroits, et le passage du MP3 à l'AAC obligeait à les retrouver tous.
+const SETTINGS = require(path.join(__dirname, "..", "src", "app", "settings.js"));
+const CONFIG_APP = require(path.join(__dirname, "..", "src", "app", "config.js"));
+const MIME = SETTINGS.mimeAudio(CONFIG_APP.adhanFile);
+
 function log(msg) { console.log("[player] " + msg); }
 
 // --- Adresse IP locale, pour que la barre sache où venir chercher le son ---
@@ -47,7 +53,7 @@ function ensureFileServer(audioPath) {
     fileServer = http.createServer(function (req, res) {
       fs.stat(audioPath, function (err, st) {
         if (err) { res.writeHead(404); return res.end(); }
-        res.writeHead(200, { "Content-Type": "audio/mpeg", "Content-Length": st.size });
+        res.writeHead(200, { "Content-Type": MIME, "Content-Length": st.size });
         fs.createReadStream(audioPath).pipe(res);
       });
     });
@@ -61,27 +67,62 @@ function ensureFileServer(audioPath) {
 }
 
 // --- Lecture locale --------------------------------------------------------
-// mpg123 est le lecteur le plus léger et le plus fiable sur Raspberry Pi OS.
-//   sudo apt install mpg123
+// ⚠️ mpg123 ne lit QUE du MP3, et l'adhan est passé en AAC pour tenir dans
+// moitié moins de place. On essaie donc plusieurs lecteurs, du plus complet au
+// plus léger, et on garde le premier qui démarre vraiment.
+//   sudo apt install mpv        (ou ffmpeg, ou mpg123 si on revient au MP3)
+const LECTEURS = [
+  { cmd: "mpv",    args: ["--no-video", "--really-quiet"], alsa: d => ["--audio-device=alsa/" + d] },
+  { cmd: "ffplay", args: ["-nodisp", "-autoexit", "-loglevel", "quiet"], alsa: null },
+  { cmd: "mpg123", args: ["-q"], alsa: d => ["-a", d] }
+];
+
 function playLocal(audioPath, opts) {
   return new Promise(function (resolve) {
-    const args = [];
-    if (opts && opts.alsaDevice) args.push("-a", opts.alsaDevice);
-    args.push("-q", audioPath);
-    let child;
-    try {
-      child = spawn("mpg123", args, { stdio: "ignore" });
-    } catch (e) {
-      log("mpg123 introuvable : " + e.message + " (sudo apt install mpg123)");
-      return resolve({ ok: false, how: "local", error: e.message });
+
+    // ⚠️ spawn() NE LÈVE RIEN si le programme est absent : il émet un
+    // événement « error » plus tard. Un try/catch autour de spawn ne détecte
+    // donc jamais un lecteur manquant — d'où cet essai en cascade, piloté par
+    // l'événement et non par une exception.
+    function essayer(i) {
+      if (i >= LECTEURS.length) {
+        const noms = LECTEURS.map(l => l.cmd).join(", ");
+        log("Aucun lecteur audio disponible. Installer l'un de : " + noms);
+        return resolve({ ok: false, how: "local", error: "aucun lecteur (" + noms + ")" });
+      }
+
+      const l = LECTEURS[i];
+      const args = l.args.slice();
+      if (opts && opts.alsaDevice && l.alsa) args.push.apply(args, l.alsa(opts.alsaDevice));
+      args.push(audioPath);
+
+      let child;
+      try {
+        child = spawn(l.cmd, args, { stdio: "ignore" });
+      } catch (e) {
+        return essayer(i + 1);
+      }
+
+      let fini = false;
+      child.on("error", function () {
+        // Programme introuvable, ou refusé : au suivant, sans bruit.
+        if (fini) return;
+        fini = true;
+        essayer(i + 1);
+      });
+      child.on("exit", function (code) {
+        if (fini) return;
+        fini = true;
+        // Un code non nul au PREMIER lecteur peut signifier « format non
+        // reconnu » (le cas exact de mpg123 face à un AAC) : on laisse sa
+        // chance au suivant plutôt que de conclure à un échec.
+        if (code !== 0 && i + 1 < LECTEURS.length) return essayer(i + 1);
+        if (code === 0) log("Lecture locale terminée (" + l.cmd + ")");
+        resolve({ ok: code === 0, how: "local", code: code, lecteur: l.cmd });
+      });
     }
-    child.on("error", function (e) {
-      log("Échec de la lecture locale : " + e.message);
-      resolve({ ok: false, how: "local", error: e.message });
-    });
-    child.on("exit", function (code) {
-      resolve({ ok: code === 0, how: "local", code: code });
-    });
+
+    essayer(0);
   });
 }
 
@@ -105,7 +146,7 @@ function playCast(audioPath, opts) {
   return ensureFileServer(audioPath).then(function (port) {
     const ip = localAddress();
     if (!ip) return { ok: false, how: "cast", error: "adresse IP locale introuvable" };
-    const url = "http://" + ip + ":" + port + "/adhan.mp3";
+    const url = "http://" + ip + ":" + port + "/" + path.basename(AUDIO);
 
     return new Promise(function (resolve) {
       const client = new Client();
@@ -143,7 +184,7 @@ function playCast(audioPath, opts) {
         client.launch(DefaultMediaReceiver, function (err, receiver) {
           if (err) { clearTimeout(timer); return done({ ok: false, how: "cast", error: err.message }); }
           receiver.load(
-            { contentId: url, contentType: "audio/mpeg", streamType: "BUFFERED",
+            { contentId: url, contentType: MIME, streamType: "BUFFERED",
               metadata: { type: 0, metadataType: 0, title: "Adhan" } },
             { autoplay: true },
             function (err2) {
