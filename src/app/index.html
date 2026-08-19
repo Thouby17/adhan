@@ -175,20 +175,20 @@
           </fieldset>
 
           <fieldset class="set-group">
-            <legend>Volume de la barre de son</legend>
+            <legend>Volume minimum de la barre</legend>
             <p class="set-help">
-              La barre a un volume propre au Wi-Fi, distinct de celui de sa
-              télécommande. L'app le remonte à ce niveau avant chaque adhan,
-              pour qu'il ne reste jamais coincé trop bas.
+              Si la barre est laissée très bas, l'adhan passe inaperçu : elle
+              annonce qu'elle joue, et personne n'entend rien. L'app remonte
+              donc le volume avant l'adhan <strong>uniquement s'il est sous ce
+              seuil</strong>. Au-dessus, elle n'y touche pas — ton réglage
+              reste le tien.
             </p>
             <div class="set-row w-sm">
-              <label for="set-volume">Niveau imposé</label>
+              <label for="set-volume">Ne jamais descendre sous</label>
               <select id="set-volume">
-                <option value="null">Ne pas y toucher</option>
-                <option value="0.2">20 % — discret</option>
-                <option value="0.3">30 %</option>
-                <option value="0.4">40 %</option>
-                <option value="0.55">55 %</option>
+                <option value="null">Ne jamais y toucher</option>
+                <option value="0.3">30 % — souvent trop discret</option>
+                <option value="0.5">50 % — recommandé</option>
                 <option value="0.7">70 % — fort</option>
               </select>
             </div>
