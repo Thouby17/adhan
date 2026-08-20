@@ -271,6 +271,163 @@ final class CastSender {
     }
 
     // -----------------------------------------------------------------
+    // Coran : envoyer une ADRESSE DISTANTE a la barre
+    // -----------------------------------------------------------------
+
+    /**
+     * Fait jouer une URL (MP3Quran) par la barre, qui streame TOUTE SEULE :
+     * la tablette ne relaie rien.
+     *
+     * Methode volontairement SEPAREE du chemin de l'adhan : celui-ci est
+     * prouve sur l'appareil reel, on ne le destabilise pas pour une autre
+     * fonction. Differences assumees : pas de serveur local, pas de plancher
+     * de volume (c'est une ecoute choisie, l'utilisateur tient sa
+     * telecommande), et une surveillance de DEUX HEURES au lieu de cinq
+     * minutes — Al-Baqara seule depasse les deux heures chez certains
+     * recitateurs lents, mais la lecture continue meme si la surveillance
+     * s'arrete : elle ne sert qu'au bouton « arreter » et au journal.
+     *
+     * Rend la main des que la lecture a DEMARRE (PLAYING observe) : l'appel
+     * vient de l'interface, qui ne peut pas attendre la fin d'une sourate.
+     * La surveillance continue dans un fil demon.
+     */
+    static Resultat jouerUrl(final String hote, String url, String titre) {
+        final CastSender s = new CastSender();
+        enCoursDeLecture = s;
+        try {
+            s.connecter(hote);
+            s.envoyer(RECEPTEUR, CastProto.NS_CONNEXION, "{\"type\":\"CONNECT\"}");
+            s.envoyer(RECEPTEUR, CastProto.NS_RECEPTEUR,
+                "{\"type\":\"LAUNCH\",\"appId\":\"" + CastProto.APP_MEDIA_DEFAUT
+                + "\",\"requestId\":" + (s.requete++) + "}");
+
+            String transport = null, session = null;
+            final long finLancement = System.currentTimeMillis() + 15000;
+            while (System.currentTimeMillis() < finLancement && transport == null) {
+                final CastProto.Message m = s.attendre(finLancement - System.currentTimeMillis());
+                if (m == null) break;
+                if (!CastProto.NS_RECEPTEUR.equals(m.espace)) continue;
+                final JSONObject j = new JSONObject(m.charge);
+                if (!"RECEIVER_STATUS".equals(j.optString("type"))) continue;
+                final JSONObject st = j.optJSONObject("status");
+                final JSONArray apps = st == null ? null : st.optJSONArray("applications");
+                for (int i = 0; apps != null && i < apps.length(); i++) {
+                    final JSONObject a = apps.optJSONObject(i);
+                    if (a != null && CastProto.APP_MEDIA_DEFAUT.equals(a.optString("appId"))) {
+                        transport = a.optString("transportId", null);
+                        session = a.optString("sessionId", null);
+                        break;
+                    }
+                }
+            }
+            if (transport == null || session == null) {
+                s.fermer(); enCoursDeLecture = null;
+                return new Resultat(false, "le recepteur ne s'est pas lance");
+            }
+
+            s.transportActif = transport;
+            s.envoyer(transport, CastProto.NS_CONNEXION, "{\"type\":\"CONNECT\"}");
+            final JSONObject media = new JSONObject()
+                .put("contentId", url)
+                .put("contentType", "audio/mpeg")
+                .put("streamType", "BUFFERED")
+                .put("metadata", new JSONObject()
+                    .put("type", 0).put("metadataType", 0)
+                    .put("title", titre == null ? "Coran" : titre));
+            s.envoyer(transport, CastProto.NS_MEDIA, new JSONObject()
+                .put("type", "LOAD").put("requestId", s.requete++)
+                .put("sessionId", session).put("media", media)
+                .put("autoplay", true).put("currentTime", 0).toString());
+
+            // Attendre le DEMARRAGE reel — « pas d'erreur » ne prouve rien.
+            final long finDemarrage = System.currentTimeMillis() + 20000;
+            boolean joue = false;
+            while (System.currentTimeMillis() < finDemarrage && !joue) {
+                final CastProto.Message m = s.attendre(1000);
+                if (m == null) continue;
+                if (!CastProto.NS_MEDIA.equals(m.espace)) continue;
+                final JSONObject j = new JSONObject(m.charge);
+                if (!"MEDIA_STATUS".equals(j.optString("type"))) continue;
+                final JSONArray st = j.optJSONArray("status");
+                final JSONObject s0 = (st == null || st.length() == 0) ? null : st.optJSONObject(0);
+                if (s0 == null) continue;
+                final int ms = s0.optInt("mediaSessionId", -1);
+                if (ms >= 0) s.mediaSession = ms;
+                final String etat = s0.optString("playerState", "");
+                if ("PLAYING".equals(etat) || "BUFFERING".equals(etat)) joue = true;
+                if ("IDLE".equals(etat) && s0.optString("idleReason", "").length() > 0) {
+                    s.fermer(); enCoursDeLecture = null;
+                    return new Resultat(false, "la barre a refuse le flux ("
+                        + s0.optString("idleReason") + ")");
+                }
+            }
+            if (!joue) {
+                s.fermer(); enCoursDeLecture = null;
+                return new Resultat(false, "lecture jamais demarree");
+            }
+
+            // La lecture tourne : surveillance en arriere-plan (battements de
+            // coeur + bouton arreter), puis liberation.
+            final Thread garde = new Thread(new Runnable() {
+                @Override public void run() { s.surveillerUrl(); }
+            }, "coran-cast-garde");
+            garde.setDaemon(true);
+            garde.start();
+
+            return new Resultat(true, "lecture demarree sur " + hote);
+        } catch (Exception e) {
+            Log.e(TAG, "coran cast : " + e.getMessage(), e);
+            s.fermer(); enCoursDeLecture = null;
+            return new Resultat(false, String.valueOf(e.getMessage()));
+        }
+    }
+
+    private void surveillerUrl() {
+        try {
+            final long limite = System.currentTimeMillis() + 2 * 3600 * 1000;
+            long prochainPing = 0;
+            while (System.currentTimeMillis() < limite && vivant) {
+                if (arretDemande) {
+                    try {
+                        if (mediaSession >= 0 && transportActif != null) {
+                            envoyer(transportActif, CastProto.NS_MEDIA,
+                                "{\"type\":\"STOP\",\"mediaSessionId\":" + mediaSession
+                                + ",\"requestId\":" + (requete++) + "}");
+                            Thread.sleep(300);
+                        }
+                    } catch (Exception ignored) {}
+                    break;
+                }
+                if (System.currentTimeMillis() >= prochainPing) {
+                    envoyer(RECEPTEUR, CastProto.NS_BATTEMENT, "{\"type\":\"PING\"}");
+                    prochainPing = System.currentTimeMillis() + 4000;
+                }
+                final CastProto.Message m = attendre(1500);
+                if (m == null) continue;
+                if (CastProto.NS_BATTEMENT.equals(m.espace) && m.charge.contains("PING")) {
+                    envoyer(m.source, CastProto.NS_BATTEMENT, "{\"type\":\"PONG\"}");
+                    continue;
+                }
+                if (!CastProto.NS_MEDIA.equals(m.espace)) continue;
+                final JSONObject j = new JSONObject(m.charge);
+                if (!"MEDIA_STATUS".equals(j.optString("type"))) continue;
+                final JSONArray st = j.optJSONArray("status");
+                final JSONObject s0 = (st == null || st.length() == 0) ? null : st.optJSONObject(0);
+                if (s0 != null && "IDLE".equals(s0.optString("playerState", ""))
+                        && s0.optString("idleReason", "").length() > 0) {
+                    Log.i(TAG, "coran termine (" + s0.optString("idleReason") + ")");
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "surveillance coran interrompue : " + e.getMessage());
+        } finally {
+            if (enCoursDeLecture == this) enCoursDeLecture = null;
+            fermer();
+        }
+    }
+
+    // -----------------------------------------------------------------
     // Transport
     // -----------------------------------------------------------------
     private void connecter(String hote) throws Exception {

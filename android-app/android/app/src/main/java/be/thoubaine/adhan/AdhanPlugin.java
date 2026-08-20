@@ -279,6 +279,43 @@ public class AdhanPlugin extends Plugin {
     }
 
     // -----------------------------------------------------------------
+    // Coran vers la barre : on donne l'ADRESSE a la barre, elle streame
+    // toute seule depuis MP3Quran — la tablette ne relaie rien.
+    // -----------------------------------------------------------------
+    @PluginMethod
+    public void coranCast(final PluginCall call) {
+        final String url = call.getString("url", "");
+        final String titre = call.getString("titre", "Coran");
+        if (url == null || url.length() == 0) {
+            call.reject("Aucune adresse audio.");
+            return;
+        }
+        final Context ctx = getContext().getApplicationContext();
+        final String hote = Reglages.hote(ctx) != null
+            ? Reglages.hote(ctx) : Reglages.hoteTrouve(ctx);
+        if (hote == null) {
+            call.resolve(new JSObject().put("ok", false)
+                .put("raison", "aucune barre configurée — Réglages → Chercher ma barre"));
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final CastSender.Resultat r = CastSender.jouerUrl(hote, url, titre);
+                call.resolve(new JSObject()
+                    .put("ok", r.ok)
+                    .put("raison", r.detail == null ? "" : r.detail)
+                    .put("hote", hote));
+            }
+        }, "adhan-coran-cast").start();
+    }
+
+    @PluginMethod
+    public void coranCastArreter(PluginCall call) {
+        CastSender.arreterEnCours();
+        call.resolve();
+    }
+
+    // -----------------------------------------------------------------
     // Permissions
     // -----------------------------------------------------------------
     @PluginMethod

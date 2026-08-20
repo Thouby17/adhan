@@ -832,3 +832,139 @@ input:focus-visible, select:focus-visible {
   border-color: var(--accent);
   color: var(--ground);
 }
+
+/* =============================================================== CORAN */
+/* Icône : livre ouvert, même technique de masque que les autres onglets. */
+:root {
+  --ico-coran: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-1.8-1.6-4.6-2-7-1.4V18c2.4-.6 5.2-.2 7 1.4 1.8-1.6 4.6-2 7-1.4V4.6C16.6 4 13.8 4.4 12 6z"/><path d="M12 6v13.4"/></svg>');
+}
+.tab-ico[data-ico="coran"] { -webkit-mask-image: var(--ico-coran); mask-image: var(--ico-coran); }
+
+.coran-tete {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px;
+}
+.coran-tete h2 { font-size: 1.3rem; }
+.coran-sous { font-size: .8rem; color: var(--text-3); margin-top: 2px; }
+.coran-recit {
+  flex: none; max-width: 46%;
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--text-3); border-radius: 10px;
+  background: transparent; color: var(--text);
+  padding: 10px 12px; font-size: .88rem; font-weight: 600; cursor: pointer;
+  transition: transform var(--fast) var(--ease);
+}
+.coran-recit:active { transform: scale(0.97); }
+#coran-recit-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coran-recit-fleche { color: var(--text-3); flex: none; }
+
+/* La liste des sourates : 114 lignes — AUCUNE animation d'entrée en cascade
+   ici, elle imposerait plusieurs secondes de retard aux dernières lignes.
+   L'apparition de la vue est déjà animée par .view. */
+#coran-liste {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 6px;
+  /* de la place pour le lecteur fixé en bas */
+  padding-bottom: 120px;
+}
+#coran-liste li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-2, rgba(255,255,255,.04));
+  border: 1px solid transparent;
+  transition: border-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+#coran-liste li:active { transform: scale(0.98); }
+#coran-liste li.en-lecture { border-color: var(--accent); }
+.coran-num {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-3, rgba(255,255,255,.08));
+  font-size: .82rem; font-weight: 700; color: var(--text-2);
+}
+#coran-liste li.en-lecture .coran-num { background: var(--accent); color: var(--ground); }
+.coran-noms { flex: 1; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.coran-noms strong { font-size: .95rem; }
+.coran-noms span { font-size: .95rem; color: var(--text-3); margin-left: auto; direction: rtl; }
+.coran-dl {
+  flex: none; font-size: .68rem; font-weight: 700; padding: 3px 8px;
+  border-radius: 99px; background: var(--surface-3, rgba(255,255,255,.08));
+  color: var(--text-3); visibility: hidden;
+}
+#coran-liste li.telechargee .coran-dl { visibility: visible; }
+
+/* Lecteur : même position et même mouvement que la bannière de mise à jour
+   (transition, pas keyframes : lecture/arrêt peuvent s'enchaîner vite). */
+#coran-player {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 10px);
+  z-index: 55;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-radius: 14px;
+  background: var(--surface-1, #232637);
+  border: 1px solid var(--surface-3, rgba(255,255,255,.08));
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  transition: transform var(--mid) var(--ease), opacity var(--mid) var(--ease),
+              visibility 0s linear 0s;
+}
+#coran-player.hidden {
+  display: flex;
+  transform: translateY(16px); opacity: 0; visibility: hidden; pointer-events: none;
+  transition: transform var(--mid) var(--ease), opacity var(--mid) var(--ease),
+              visibility 0s linear var(--mid);
+}
+.coran-player-txt { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.coran-player-txt strong { font-size: .92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coran-player-txt span { flex: none; font-size: .78rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+#coran-seek {
+  width: 100%; height: 26px; margin: 0; accent-color: var(--accent);
+  background: transparent;
+}
+.coran-player-btns { display: flex; gap: 8px; }
+.coran-player-btns button {
+  border: 1px solid var(--surface-3, rgba(255,255,255,.12)); cursor: pointer;
+  background: var(--surface-2, rgba(255,255,255,.05)); color: var(--text);
+  border-radius: 10px; padding: 9px 0; font-size: .95rem; font-weight: 600;
+  transition: transform var(--fast) var(--ease);
+}
+.coran-player-btns button:active { transform: scale(0.96); }
+#coran-play { flex: 1; }
+#coran-barre-btn { flex: 2; font-size: .85rem; }
+#coran-barre-btn.actif { background: var(--accent); border-color: var(--accent); color: var(--ground); }
+#coran-stop { flex: 1; }
+#coran-play:disabled { opacity: .5; }
+
+/* Sélecteur de récitateur : recouvre la vue. */
+#coran-picker {
+  position: fixed; inset: 0; z-index: 70;
+  background: var(--ground, #14161f);
+  display: flex; flex-direction: column;
+  padding: 14px 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+}
+#coran-picker.hidden { display: none; }
+.coran-picker-tete { display: flex; gap: 8px; margin-bottom: 10px; }
+#coran-recherche {
+  flex: 1; border: 1px solid var(--surface-3, rgba(255,255,255,.15));
+  background: var(--surface-2, rgba(255,255,255,.05)); color: var(--text);
+  border-radius: 10px; padding: 12px 14px; font-size: .95rem;
+}
+#coran-picker-fermer {
+  flex: none; border: 0; cursor: pointer; border-radius: 10px;
+  background: var(--surface-3, rgba(255,255,255,.1)); color: var(--text);
+  padding: 0 16px; font-weight: 600;
+}
+#coran-recit-liste {
+  list-style: none; margin: 0; padding: 0;
+  overflow-y: auto; flex: 1;
+  display: grid; gap: 6px; align-content: start;
+}
+#coran-recit-liste li {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 11px 14px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-2, rgba(255,255,255,.04));
+  border: 1px solid transparent;
+}
+#coran-recit-liste li.selected { border-color: var(--accent); }
+#coran-recit-liste li strong { font-size: .92rem; }
+#coran-recit-liste li span { font-size: .76rem; color: var(--text-3); }
+#coran-recit-liste li.vide { color: var(--text-3); cursor: default; text-align: center; padding: 24px; }

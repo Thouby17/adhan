@@ -62,6 +62,9 @@ ${read("settings.js")}
 ${read("native.js")}
 </script>
 <script>
+${read("coran.js")}
+</script>
+<script>
 ${read("app.js")}
 </script>`;
 

@@ -119,6 +119,8 @@
     testerReveil: function (min) { return appel("testerReveil", { minutes: min || 2 }); },
     verifierMiseAJour: function () { return appel("verifierMiseAJour"); },
     installerMiseAJour: function (url) { return appel("installerMiseAJour", { url: url }); },
+    coranCast: function (url, titre) { return appel("coranCast", { url: url, titre: titre || "" }); },
+    coranCastArreter: function () { return appel("coranCastArreter"); },
     ecouter: ecouter
   };
 })(typeof self !== "undefined" ? self : this);

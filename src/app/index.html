@@ -140,6 +140,49 @@
       </section>
 
       <!-- ==================== RÉGLAGES ==================== -->
+      <!-- ================= CORAN ================= -->
+      <section id="view-coran" class="view hidden">
+        <header class="coran-tete">
+          <div>
+            <h2>Coran</h2>
+            <p class="coran-sous">Récitation en continu — l'écoute reprend où elle s'était arrêtée.</p>
+          </div>
+          <button type="button" id="coran-recit-btn" class="coran-recit">
+            <span id="coran-recit-nom">…</span>
+            <span class="coran-recit-fleche" aria-hidden="true">▾</span>
+          </button>
+        </header>
+
+        <ul id="coran-liste"></ul>
+
+        <!-- Lecteur : apparaît quand une sourate joue. -->
+        <div id="coran-player" class="hidden">
+          <div class="coran-player-txt">
+            <strong id="coran-titre"></strong>
+            <span id="coran-temps">--:-- / --:--</span>
+          </div>
+          <input type="range" id="coran-seek" min="0" max="1000" value="0"
+                 aria-label="Position de lecture">
+          <div class="coran-player-btns">
+            <button type="button" id="coran-play" aria-label="Lecture ou pause">▶</button>
+            <button type="button" id="coran-barre-btn">Sur la barre</button>
+            <button type="button" id="coran-stop" aria-label="Arrêter">■</button>
+          </div>
+        </div>
+
+        <!-- Choix du récitateur : recouvre l'écran, se ferme d'un geste. -->
+        <div id="coran-picker" class="hidden">
+          <div class="coran-picker-tete">
+            <input type="search" id="coran-recherche" placeholder="Chercher un récitateur…"
+                   autocomplete="off">
+            <button type="button" id="coran-picker-fermer">Fermer</button>
+          </div>
+          <ul id="coran-recit-liste"></ul>
+        </div>
+
+        <audio id="coran-audio" preload="none"></audio>
+      </section>
+
       <section id="view-settings" class="view hidden">
         <header class="topbar">
           <h1 class="topbar-title">Réglages</h1>
@@ -376,6 +419,10 @@
         <span class="tab-ico" data-ico="month" aria-hidden="true"></span>
         <span class="tab-txt">Mois</span>
       </button>
+      <button class="tab" data-view="coran">
+        <span class="tab-ico" data-ico="coran" aria-hidden="true"></span>
+        <span class="tab-txt">Coran</span>
+      </button>
       <button class="tab" data-view="settings">
         <span class="tab-ico" data-ico="settings" aria-hidden="true"></span>
         <span class="tab-txt">Réglages</span>
@@ -438,6 +485,7 @@
   <script src="praytimes.js"></script>
   <script src="settings.js"></script>
   <script src="native.js"></script>
+  <script src="coran.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

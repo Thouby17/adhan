@@ -603,7 +603,7 @@
   // ---------- Onglets ----------------------------------------------------
   function showView(name) {
     state.view = name;
-    for (const v of ["today", "track", "qibla", "month", "settings"]) {
+    for (const v of ["today", "track", "qibla", "month", "coran", "settings"]) {
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     }
     for (const t of dom.tabs) t.classList.toggle("is-active", t.dataset.view === name);
@@ -612,6 +612,7 @@
     if (name === "qibla") renderQibla();
     if (name === "month") renderMonth();
     if (name === "settings") fillSettingsForm();
+    if (name === "coran" && window.AdhanCoran) window.AdhanCoran.afficher();
   }
 
   // ---------- Compteur de dhikr ------------------------------------------
