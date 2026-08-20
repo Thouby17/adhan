@@ -36,3 +36,7 @@ android-app/android/app/src/main/assets/capacitor.plugins.json
 *.keystore
 *.p12.base64
 .motdepasse.txt
+
+# Skills d'agent installés localement (npx skills add) — outillage, pas produit.
+.agents/
+.claude/skills/

@@ -968,3 +968,61 @@ input:focus-visible, select:focus-visible {
 #coran-recit-liste li strong { font-size: .92rem; }
 #coran-recit-liste li span { font-size: .76rem; color: var(--text-3); }
 #coran-recit-liste li.vide { color: var(--text-3); cursor: default; text-align: center; padding: 24px; }
+
+/* ============================================== TRANSITIONS.DEV =========
+   Trois recettes du skill transitions-dev, choisies par SES règles de
+   correspondance : surface pleine page → modal ; erreur de formulaire →
+   secousse ; pastille qui apparaît → pop. Courbe et durées de la source
+   (cubic-bezier(0.22,1,0.36,1), ouverture 250 ms / fermeture 150 ms) :
+   c'est la valeur du skill, on ne l'aplatit pas dans nos jetons. */
+:root {
+  --tdev-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tdev-open: 250ms;
+  --tdev-close: 150ms;
+}
+
+/* --- Sélecteur de récitateur : recette « Modal open/close ». Ouverture
+   ample, fermeture plus brève — on quitte plus vite qu'on n'arrive. */
+#coran-picker {
+  transform-origin: center;
+  transition: transform var(--tdev-open) var(--tdev-ease),
+              opacity   var(--tdev-open) var(--tdev-ease),
+              visibility 0s linear 0s;
+  will-change: transform, opacity;
+}
+#coran-picker.hidden {
+  display: flex;                       /* neutralise le .hidden global */
+  transform: scale(0.96);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform var(--tdev-close) var(--tdev-ease),
+              opacity   var(--tdev-close) var(--tdev-ease),
+              visibility 0s linear var(--tdev-close);
+}
+
+/* --- Erreurs de réglages : recette « Error state shake ». Distance 6 px,
+   retour avec léger dépassement — le « non » de la tête, pas un séisme. */
+@keyframes tdev-shake {
+  0%     { transform: translateX(0); animation-timing-function: var(--tdev-ease); }
+  28.57% { transform: translateX(6px); animation-timing-function: var(--tdev-ease); }
+  57.14% { transform: translateX(-6px); animation-timing-function: var(--tdev-ease); }
+  78.57% { transform: translateX(4px); animation-timing-function: var(--tdev-ease); }
+  100%   { transform: translateX(0); }
+}
+.t-shake { animation: tdev-shake 340ms; }
+
+/* --- Pastille « hors ligne » : recette « Notification badge ». Ne joue
+   qu'à l'APPARITION en direct (fin d'un téléchargement) — au re-rendu de
+   la liste, la pastille est déjà là et ne rejoue rien. */
+@keyframes tdev-badge-in {
+  from { transform: translateY(3px) scale(0.7); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+#coran-liste li.telechargee .coran-dl { animation: tdev-badge-in 200ms var(--tdev-ease) backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  #coran-picker { transition: none !important; }
+  .t-shake { animation: none !important; }
+  #coran-liste li.telechargee .coran-dl { animation: none !important; }
+}

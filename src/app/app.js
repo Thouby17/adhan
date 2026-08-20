@@ -916,6 +916,12 @@
     }
     dom.setErrors.textContent = Object.keys(errors).map(k => "• " + errors[k]).join("\n");
     dom.setErrors.classList.remove("hidden");
+    // Secousse (transitions.dev) : retirer puis remettre la classe pour que
+    // l'animation REJOUE si l'utilisateur enregistre deux fois de suite avec
+    // la même erreur — sans le retrait forcé, elle ne joue qu'une fois.
+    dom.setErrors.classList.remove("t-shake");
+    void dom.setErrors.offsetWidth;
+    dom.setErrors.classList.add("t-shake");
   }
 
   // Aperçu sur la nuit la plus courte : c'est le jour où les conventions
