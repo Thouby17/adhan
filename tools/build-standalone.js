@@ -16,6 +16,7 @@ const APP = path.join(ROOT, "src", "app");
 const read = f => fs.readFileSync(path.join(APP, f), "utf8");
 
 const CONFIG = require(path.join(APP, "config.js"));
+const S = require(path.join(APP, "settings.js"));
 const audioPath = path.join(APP, CONFIG.adhanFile);
 
 if (!fs.existsSync(audioPath)) {
