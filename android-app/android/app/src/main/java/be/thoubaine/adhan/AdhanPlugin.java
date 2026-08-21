@@ -222,7 +222,7 @@ public class AdhanPlugin extends Plugin {
         new Thread(new Runnable() {
             @Override public void run() {
                 final CastSender.Resultat r =
-                    CastSender.jouer(ctx, hote.trim(), Reglages.plancher(ctx));
+                    CastSender.jouerTest(ctx, hote.trim(), Reglages.plancher(ctx));
                 call.resolve(new JSObject()
                     .put("ok", r.ok)
                     .put("detail", r.detail == null ? "" : r.detail));

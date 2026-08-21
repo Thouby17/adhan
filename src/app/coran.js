@@ -298,6 +298,8 @@
       etat.versets = null;
       renderTexte(n);
       jouerEnModeTexte(n, jeton);
+      majListe();
+      majLecteur();
       return;
     }
 
@@ -756,20 +758,24 @@
       }
       arreter();
     });
-    var erreursVerset = 0;
+    // Le compteur d'erreurs suit le VERSET (pas l'événement « playing ») :
+    // un fichier qui démarre puis casse à mi-flux — panne déterministe —
+    // aurait rebouclé à l'infini si « playing » remettait le compteur à zéro.
+    var erreursVerset = 0, versetEnErreur = -1;
     audio.addEventListener("error", function () {
       if (etat.enLecture == null || etat.surBarre) return;
-      // Mode texte : un verset qui échoue (Wi-Fi qui hoquette) ne doit pas
-      // figer le suivi en silence — on réessaie une fois, puis on passe.
       if (etat.texte && etat.versetUrls) {
+        if (versetEnErreur !== etat.versetIdx) {
+          versetEnErreur = etat.versetIdx;
+          erreursVerset = 0;
+        }
         erreursVerset++;
         if (erreursVerset <= 1) { jouerVerset(etat.versetIdx, etat.seq); }
-        else { erreursVerset = 0; jouerVerset(etat.versetIdx + 1, etat.seq); }
+        else { jouerVerset(etat.versetIdx + 1, etat.seq); }
         return;
       }
       majTitre("Lecture interrompue — vérifier la connexion.");
     });
-    audio.addEventListener("playing", function () { erreursVerset = 0; });
 
     etat.volume = (function () {
       var v = lireJson(CLE_VOLUME);
@@ -851,6 +857,10 @@
     // sans quoi récitation et adhan se superposaient, deux voix mêlées au
     // moment le plus solennel. Le lecteur reste en pause : un tap reprend.
     pause: function () {
+      // Invalider AUSSI les chaînes en vol : entre deux versets, un fetch
+      // qui se résolvait après cette pause relançait la récitation
+      // par-dessus l'adhan — la superposition exacte qu'on élimine.
+      etat.seq++;
       var a = $("coran-audio");
       try { if (a && !a.paused) a.pause(); } catch (e) {}
       if (etat.surBarre && natif()) {

@@ -908,8 +908,19 @@
     // ⚠️ Marquer la prière comme sonnée QUELLE QUE SOIT l'origine (service
     // webOS, hash, écran) : sur TV, « Arrêter » dans la fenêtre de 2 min
     // relançait l'adhan à zéro — tickSlow ne voyait pas fired.
+    // On marque l'ENTRÉE DU PLANNING la plus proche, pas « aujourd'hui » :
+    // l'Isha d'après minuit appartient à la VEILLE dans le planning — une
+    // clé datée du jour courant l'aurait ratée (et aurait éteint par erreur
+    // l'Isha du lendemain soir).
     if (prayer && prayer !== "test") {
-      state.fired[dayKey(new Date()) + ":" + prayer] = true;
+      const mnt = new Date();
+      let plusProche = null;
+      for (const e of state.schedule) {
+        if (e.prayer !== prayer) continue;
+        if (!plusProche || Math.abs(e.at - mnt) < Math.abs(plusProche.at - mnt)) plusProche = e;
+      }
+      if (plusProche) state.fired[plusProche.id] = true;
+      else state.fired[dayKey(mnt) + ":" + prayer] = true;
     }
     fromScreen = !!screenTriggered;
     stopTimers();
@@ -1125,7 +1136,15 @@
     const btn = document.getElementById("btn-set-reset-undo");
     if (btn) btn.classList.add("hidden");
     persistSettings(avant, function (ok) {
-      if (!ok) { toast("Restauration impossible"); return; }
+      if (!ok) {
+        // L'écriture a échoué : rien n'est restauré — l'offre d'annulation
+        // doit survivre pour pouvoir réessayer.
+        reglagesAvantReset = avant;
+        const b2 = document.getElementById("btn-set-reset-undo");
+        if (b2) b2.classList.remove("hidden");
+        toast("Restauration impossible — réessaie");
+        return;
+      }
       applyOverrides(avant); refreshDailyCache(); fillSettingsForm();
       toast("Réglages restaurés");
     });

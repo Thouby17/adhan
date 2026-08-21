@@ -173,7 +173,12 @@ final class UpdateChecker {
             c.setConnectTimeout(10000);
             c.setReadTimeout(30000);
 
-            final long attendu = c.getContentLengthLong();
+            // getContentLengthLong n'existe qu'a partir d'Android 7 (API 24) —
+            // sur une tablette 5.1/6.0, c'etait une NoSuchMethodError (une
+            // Error, que nos catch(Exception) ne rattrapent pas) : crash au
+            // lancement d'une mise a jour. getContentLength (int) suffit
+            // largement pour une APK de quelques Mo.
+            final long attendu = c.getContentLength();
             final InputStream in = c.getInputStream();
             final FileOutputStream out = new FileOutputStream(dest);
             final byte[] buf = new byte[64 * 1024];

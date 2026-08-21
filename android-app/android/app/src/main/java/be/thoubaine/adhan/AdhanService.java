@@ -95,7 +95,12 @@ public class AdhanService extends Service {
         // Android 14 tue l'application si un service demarre ne passe pas au
         // premier plan dans les secondes qui suivent. On le fait donc AVANT
         // toute autre chose, quelle que soit l'action demandee.
-        demarrerAuPremierPlan(ACTION_JOUER.equals(action));
+        // ⚠️ Une demande de VEILLE pendant qu'un adhan sonne ne doit PAS
+        // retrograder la notification (et son bouton Arreter) : c'est le cas
+        // SYSTEMATIQUE de 5 h — la page fraiche ouverte par l'alarme
+        // reprogramme les alarmes, ce qui redemande la veille en plein appel.
+        demarrerAuPremierPlan(ACTION_JOUER.equals(action)
+            || (ACTION_VEILLE.equals(action) && priereEnCours != null));
 
         if (ACTION_ARRETER.equals(action)) {
             // Invalider TOUT ce qui est en vol, transmettre l'arret a la
@@ -152,6 +157,10 @@ public class AdhanService extends Service {
             // « les deux » il joue jusqu'au bout ; en mode « cast » il n'est
             // qu'un filet, coupe des que la barre confirme la lecture.
             final boolean localComplet = Reglages.SORTIE_DEUX.equals(sortie);
+            // castGen AVANT le local : si le lecteur local echoue ici meme,
+            // son catch ne doit pas clore l'adhan — le cast va prendre le
+            // relais juste apres.
+            castGen = gen;
             jouerLocal(gen);
             lancerCast(gen, localComplet);
             return;

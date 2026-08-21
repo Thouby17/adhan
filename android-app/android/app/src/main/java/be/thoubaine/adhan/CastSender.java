@@ -97,6 +97,27 @@ final class CastSender {
     }
 
     /**
+     * Variante pour le bouton « Envoyer un adhan d'essai » : elle ne
+     * S'INSCRIT PAS comme session adhan — un essai lance pendant qu'un vrai
+     * adhan joue sur la barre lui volait son bouton Arreter.
+     */
+    static Resultat jouerTest(Context ctx, String hote, double plancher) {
+        final CastSender s = new CastSender();
+        final MediaHost serveur = new MediaHost();
+        try {
+            final String url = serveur.demarrer(ctx);
+            if (url == null) return new Resultat(false, "serveur local impossible");
+            return s.derouler(hote, url, plancher, serveur);
+        } catch (Exception e) {
+            Log.e(TAG, "essai : " + e.getMessage(), e);
+            return new Resultat(false, String.valueOf(e.getMessage()));
+        } finally {
+            s.fermer();
+            serveur.arreter();
+        }
+    }
+
+    /**
      * @param surLecture prevenu (une fois) des que la barre confirme
      *        PLAYING — c'est ce qui permet au filet local de se couper
      *        sans attendre la fin des trois minutes.
@@ -476,7 +497,9 @@ final class CastSender {
                 while (vivant) {
                     try {
                         final CastProto.Message m = CastProto.lire(in);
-                        if (!recus.offer(m)) recus.poll();   // on garde les recents
+                        // Faire de la place PUIS poser : l'ancienne version
+                        // jetait le message NEUF quand la file etait pleine.
+                        while (!recus.offer(m)) recus.poll();
                     } catch (Exception e) {
                         if (vivant) Log.w(TAG, "flux interrompu : " + e.getMessage());
                         vivant = false;
