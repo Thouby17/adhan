@@ -442,6 +442,18 @@ public class AdhanService extends Service {
         }
     }
 
+    /**
+     * L'utilisateur FERME l'application (balayée des récents) : une écoute
+     * Coran ne doit pas continuer toute seule sur la barre — constat
+     * terrain : « le plus fou, j'ai fermé l'app et ça continuait ».
+     * L'ADHAN, lui, survit : c'est un réveil, pas un divertissement.
+     */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        CastSender.arreterCoran();
+        super.onTaskRemoved(rootIntent);
+    }
+
     @Override
     public void onDestroy() {
         generation.incrementAndGet();

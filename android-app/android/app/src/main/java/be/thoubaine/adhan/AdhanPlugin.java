@@ -306,9 +306,10 @@ public class AdhanPlugin extends Plugin {
         // le processus en pleine sourate de 2 h — la barre continuerait
         // (elle streame elle-meme) mais le bouton d'arret mourrait en silence.
         demarrerVeilleInterne();
+        final int numero = call.getInt("numero", 0);
         new Thread(new Runnable() {
             @Override public void run() {
-                final CastSender.Resultat r = CastSender.jouerUrl(hote, url, titre);
+                final CastSender.Resultat r = CastSender.jouerUrl(hote, url, titre, numero);
                 call.resolve(new JSObject()
                     .put("ok", r.ok)
                     .put("raison", r.detail == null ? "" : r.detail)
@@ -320,6 +321,60 @@ public class AdhanPlugin extends Plugin {
     @PluginMethod
     public void coranCastArreter(PluginCall call) {
         CastSender.arreterCoran();
+        call.resolve();
+    }
+
+    /** Mode texte SUR la barre : la file des versets. */
+    @PluginMethod
+    public void coranCastVersets(final PluginCall call) {
+        final com.getcapacitor.JSArray urlsJs = call.getArray("urls");
+        final int numero = call.getInt("numero", 0);
+        if (urlsJs == null || urlsJs.length() == 0) {
+            call.reject("Aucun verset fourni.");
+            return;
+        }
+        final Context ctx = getContext().getApplicationContext();
+        final String hote = Reglages.hote(ctx) != null
+            ? Reglages.hote(ctx) : Reglages.hoteTrouve(ctx);
+        if (hote == null) {
+            call.resolve(new JSObject().put("ok", false)
+                .put("raison", "aucune barre configurée — Réglages → Chercher ma barre"));
+            return;
+        }
+        final java.util.List<String> urls = new java.util.ArrayList<>();
+        try {
+            for (int i = 0; i < urlsJs.length(); i++) urls.add(urlsJs.getString(i));
+        } catch (Exception e) {
+            call.reject("Liste de versets illisible.");
+            return;
+        }
+        demarrerVeilleInterne();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final CastSender.Resultat r =
+                    CastSender.jouerFileVersets(hote, urls, "Coran", numero);
+                call.resolve(new JSObject()
+                    .put("ok", r.ok)
+                    .put("raison", r.detail == null ? "" : r.detail)
+                    .put("hote", hote));
+            }
+        }, "adhan-coran-file").start();
+    }
+
+    /** ±10 s ou position absolue sur la barre. */
+    @PluginMethod
+    public void coranCastSeek(PluginCall call) {
+        final Double sec = call.getDouble("sec", 0d);
+        final Boolean absolu = call.getBoolean("absolu", false);
+        if (sec != null) CastSender.coranSeek(sec, absolu != null && absolu);
+        call.resolve();
+    }
+
+    /** Verset précédent/suivant (ou saut de N) dans la file. */
+    @PluginMethod
+    public void coranCastSaut(PluginCall call) {
+        final Integer delta = call.getInt("delta", 0);
+        if (delta != null && delta != 0) CastSender.coranSaut(delta);
         call.resolve();
     }
 

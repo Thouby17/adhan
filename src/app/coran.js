@@ -479,8 +479,13 @@
       num.textContent = v.key.split(":")[1];
       sp.appendChild(num);
       sp.addEventListener("click", function () {
-        // Toucher un verset = y aller — seulement si l'audio par verset existe.
-        if (etat.texte && etat.versetUrls) jouerVerset(i, etat.seq);
+        if (!etat.texte || !etat.versetUrls) return;
+        if (etat.surBarre) {
+          // La file de la barre saute jusqu'au verset touché.
+          if (natif()) root.AdhanNative.coranCastSaut(i - etat.versetIdx).catch(function () {});
+          return;
+        }
+        jouerVerset(i, etat.seq);
       });
       corps.appendChild(sp);
       corps.appendChild(document.createTextNode(" "));
@@ -489,12 +494,53 @@
 
   function basculerTexte() {
     if (etat.enLecture == null) return;
+    var panneau = $("coran-texte");
+
+    // SUR LA BARRE : la bascule se fait à chaud, sans repasser par la
+    // tablette — texte ON = la file de versets part sur la barre ; texte
+    // OFF = retour au fichier continu, toujours sur la barre.
     if (etat.surBarre) {
-      majTitre("Le suivi du texte se fait sur la tablette — reviens d'abord de la barre.");
+      if (!etat.texte) {
+        var nB = etat.enLecture;
+        var rec = recitationQC();
+        if (!rec) {
+          majTitre("Le suivi verset par verset n'existe pas pour ce récitateur.");
+          return;
+        }
+        etat.texte = true;
+        majLecteur();
+        panneau.classList.remove("hidden");
+        etat.versets = null;
+        renderTexte(nB);
+        var jetonB = ++etat.seq;
+        Promise.all([chargerTexte(nB), chargerVersetsAudio(nB, rec)])
+          .then(function (res) {
+            if (jetonB !== etat.seq) return;
+            etat.versets = res[0];
+            etat.versetUrls = res[1];
+            renderTexte(nB);
+            versLaBarre();            // repart en FILE, panneau ouvert
+          })
+          .catch(function (e) {
+            if (jetonB !== etat.seq) return;
+            console.log("Texte barre : " + e.message);
+            etat.texte = false;
+            panneau.classList.add("hidden");
+            majLecteur();
+            majTitre("Texte indisponible — vérifier la connexion, puis réessayer.");
+          });
+      } else {
+        etat.texte = false;
+        etat.versetIdx = -1;
+        etat.versetUrls = null;
+        panneau.classList.add("hidden");
+        majLecteur();
+        versLaBarre();                // retour au fichier continu sur la barre
+      }
       return;
     }
+
     etat.texte = !etat.texte;
-    var panneau = $("coran-texte");
     if (etat.texte) {
       panneau.classList.remove("hidden");
       jouer(etat.enLecture);        // repart en mode verset (ou continu + texte)
@@ -564,8 +610,14 @@
           tEl.textContent = fmt(r.position) + " / " + fmt(r.duree || NaN);
         }
         var seek = $("coran-seek");
-        if (seek && r.duree > 0) {
+        if (seek && r.duree > 0 && !seek.matches(":active")) {
           seek.value = String(Math.round(r.position * 1000 / r.duree));
+        }
+        // Mode texte sur la barre : surligner le verset réellement récité.
+        if (etat.texte && typeof r.verset === "number" && r.verset >= 0
+            && r.verset !== etat.versetIdx) {
+          etat.versetIdx = r.verset;
+          surlignerVerset(r.verset);
         }
       }).catch(function () {});
     }, 2000);
@@ -579,13 +631,43 @@
     // Invalider les chaînes en vol : sans ça, un fetch de mode texte qui se
     // terminait APRÈS l'envoi relançait l'audio local PAR-DESSUS la barre.
     etat.seq++;
-    // La barre lit le fichier complet MP3Quran : on quitte le mode texte.
-    if (etat.texte) {
-      etat.texte = false;
-      etat.versetIdx = -1; etat.versetUrls = null;
-      var panneau = $("coran-texte");
-      if (panneau) panneau.classList.add("hidden");
+
+    // MODE TEXTE + BARRE : les versets partent en file de lecture Cast, le
+    // panneau RESTE ouvert, et le suivi surligne le verset que la barre
+    // récite. (Constat terrain : le mode texte refusait la barre — « je ne
+    // comprends pas ».)
+    if (etat.texte && etat.versetUrls) {
+      var nT = etat.enLecture;
+      var audioT = $("coran-audio");
+      try { audioT.pause(); } catch (e) {}
+      etat.surBarre = true;
+      majLecteur();
+      majTitre("Envoi des versets vers la barre…");
+      root.AdhanNative.coranCastVersets(etat.versetUrls, nT)
+        .then(function (r) {
+          if (r && r.ok) {
+            majTitre("Sur la barre : " + SOURATES[nT - 1][0]);
+            if (root.toast) root.toast("Envoyé à la barre de son");
+            demarrerSuiviBarre();
+          } else {
+            etat.surBarre = false;
+            majTitre("La barre n'a pas répondu"
+              + (r && r.raison ? " — " + r.raison : "")
+              + ". Vérifie son adresse dans Réglages.");
+            majLecteur();
+          }
+        })
+        .catch(function (e) {
+          etat.surBarre = false;
+          console.log("File versets : " + e.message);
+          majTitre("Envoi impossible — vérifie que la barre est allumée et sur le même Wi-Fi.");
+          majLecteur();
+        });
+      return;
     }
+
+    // Mode continu : la barre lit le fichier complet ; si un panneau texte
+    // sans suivi était ouvert, il reste consultable.
     var n = etat.enLecture;
     var audio = $("coran-audio");
     audio.pause();
@@ -594,7 +676,7 @@
     majTitre("Envoi vers la barre…");
     // La barre streame TOUTE SEULE depuis MP3Quran : la tablette ne relaie
     // rien, on lui donne juste l'adresse et le titre.
-    root.AdhanNative.coranCast(urlSourate(n), "Coran — " + SOURATES[n - 1][0])
+    root.AdhanNative.coranCast(urlSourate(n), "Coran — " + SOURATES[n - 1][0], n)
       .then(function (r) {
         if (r && r.ok) {
           majTitre("Sur la barre : " + SOURATES[n - 1][0]);
@@ -656,10 +738,10 @@
     var audio = $("coran-audio");
     $("coran-play").textContent = (etat.surBarre || audio.paused) ? "▶" : "⏸";
     $("coran-play").disabled = etat.surBarre;
-    $("coran-seek").disabled = etat.surBarre || etat.texte;
+    $("coran-seek").disabled = !etat.surBarre && etat.texte;
     $("coran-barre-btn").classList.toggle("actif", etat.surBarre);
-    $("coran-rew").disabled = etat.surBarre;
-    $("coran-fwd").disabled = etat.surBarre;
+    $("coran-rew").disabled = false;
+    $("coran-fwd").disabled = false;
     // En mode texte, ±10 s devient verset précédent/suivant : l'étiquette
     // DOIT suivre, sinon le bouton ment.
     var vers = !!(etat.texte && etat.versetUrls);
@@ -838,12 +920,23 @@
       ecrireJson(CLE_VOLUME, etat.volume);
     });
 
-    // ±10 s en continu ; verset précédent/suivant en mode texte.
+    // ±10 s en continu ; verset précédent/suivant en mode texte — et sur la
+    // BARRE, les mêmes gestes commandent la barre (ils étaient morts).
     $("coran-rew").addEventListener("click", function () {
+      if (etat.surBarre) {
+        if (etat.texte && natif()) root.AdhanNative.coranCastSaut(-1).catch(function () {});
+        else if (natif()) root.AdhanNative.coranCastSeek(-10, false).catch(function () {});
+        return;
+      }
       if (etat.texte && etat.versetUrls) { jouerVerset(etat.versetIdx - 1, etat.seq); return; }
       try { audio.currentTime = Math.max(0, audio.currentTime - 10); } catch (e) {}
     });
     $("coran-fwd").addEventListener("click", function () {
+      if (etat.surBarre) {
+        if (etat.texte && natif()) root.AdhanNative.coranCastSaut(1).catch(function () {});
+        else if (natif()) root.AdhanNative.coranCastSeek(10, false).catch(function () {});
+        return;
+      }
       if (etat.texte && etat.versetUrls) { jouerVerset(etat.versetIdx + 1, etat.seq); return; }
       try {
         if (isFinite(audio.duration)) {
@@ -873,6 +966,16 @@
       }
     });
     $("coran-seek").addEventListener("input", function () {
+      if (etat.surBarre) {
+        // Le curseur commande la barre : position absolue.
+        var frac = Number(this.value) / 1000;
+        if (natif()) root.AdhanNative.coranCastEtat().then(function (r) {
+          if (r && r.actif && r.duree > 0) {
+            root.AdhanNative.coranCastSeek(r.duree * frac, true).catch(function () {});
+          }
+        }).catch(function () {});
+        return;
+      }
       var audio2 = $("coran-audio");
       if (isFinite(audio2.duration) && audio2.duration > 0) {
         audio2.currentTime = audio2.duration * Number(this.value) / 1000;
@@ -903,6 +1006,23 @@
     });
   }
 
+  // L'app rouvre pendant que la barre joue (constat terrain : double son —
+  // l'interface ignorait la session en cours et relançait en local) : on
+  // REPREND le contrôle de la session au lieu de l'ignorer.
+  function reprendreControleBarre() {
+    if (!natif() || etat.enLecture != null) return;
+    root.AdhanNative.coranCastEtat().then(function (r) {
+      if (!r || !r.actif || !r.numero || r.numero < 1 || r.numero > 114) return;
+      if (etat.enLecture != null) return;
+      etat.enLecture = r.numero;
+      etat.surBarre = true;
+      majTitre("Sur la barre : " + SOURATES[r.numero - 1][0]);
+      majListe();
+      majLecteur();
+      demarrerSuiviBarre();
+    }).catch(function () {});
+  }
+
   root.AdhanCoran = {
     // L'adhan a priorité absolue : l'app appelle ceci avant de sonner —
     // sans quoi récitation et adhan se superposaient, deux voix mêlées au
@@ -925,6 +1045,7 @@
       preparer();
       relireBadges().then(renderListe);
       chargerCatalogue(false);      // en avance, pour un picker instantané
+      reprendreControleBarre();
     }
   };
 })(typeof self !== "undefined" ? self : this);
