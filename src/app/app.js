@@ -191,6 +191,42 @@
     } catch (e) { dom.dateHijri.textContent = ""; }
   }
 
+  /**
+   * Bascule l état des lignes EN PLACE, sans reconstruire le HTML.
+   *
+   * C est le préalable que l audit mouvement exigeait : sur des éléments
+   * reconstruits à neuf, aucune transition ne peut jouer — le surlignage
+   * ambré SAUTAIT d une prière à la suivante sur un écran que personne n a
+   * touché. Ici les classes changent sur les éléments existants, et le CSS
+   * fait glisser les couleurs en 240 ms.
+   * La reconstruction complète (renderRows) reste la voie normale pour tout
+   * ce qui change la STRUCTURE : nouveau jour, cloche basculée, réglages.
+   */
+  function majEtatRows() {
+    if (!state.today || !dom.rows.children.length) { renderRows(); return; }
+    const now = new Date();
+    const next = findNext();
+    const prev = findPrev();
+    for (const li of dom.rows.children) {
+      const key = li.dataset.key;
+      const at = key === "lever" ? state.today.sunrise : state.today[key];
+      li.classList.toggle("is-passed", !!(at && at <= now));
+      if (key === "lever") continue;
+      const isNext = !!(next && next.prayer === key && at && +next.at === +at);
+      li.classList.toggle("is-next", isNext);
+      const fin = key === "fajr" ? state.today.sunrise : (next ? next.at : null);
+      const enCours = !!(prev && prev.prayer === key && !isNext && fin && fin > now);
+      if (enCours) li.classList.remove("is-passed");
+      const deja = li.querySelector(".row-until");
+      if (enCours && !deja) {
+        const nom = li.querySelector(".row-name");
+        if (nom) nom.appendChild(el("span", "row-until", "jusqu'à " + hm(fin)));
+      } else if (!enCours && deja) {
+        deja.remove();
+      }
+    }
+  }
+
   // ---------- Suivi des prières -----------------------------------------
   // Données PERSONNELLES, gardées sur l'appareil et jamais envoyées au
   // service : le service décide quand sonner, pas ce qui a été accompli.
@@ -348,6 +384,7 @@
 
     for (const e of entries) {
       const li = el("li", "row");
+      li.dataset.key = e.kind === "marker" ? "lever" : e.key;
       if (e.at && e.at <= now) li.classList.add("is-passed");
 
       if (e.kind === "marker") {
@@ -415,7 +452,10 @@
       dom.nextName.textContent = LABELS[next.prayer];
       dom.nextAt.textContent = "à " + hm(next.at);
       state.lastNextId = next.id;
-      renderRows();
+      // EN PLACE et non renderRows() : c'est l'instant du basculement, le
+      // seul moment ambiant de l'écran — les couleurs doivent glisser, pas
+      // sauter, et une transition ne joue jamais sur des éléments neufs.
+      majEtatRows();
       updateNightMode();
     }
 
