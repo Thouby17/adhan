@@ -223,7 +223,7 @@ html, body {
   display: grid; place-items: center;
   background: transparent; border: 0; cursor: pointer;
   border-radius: 50%;
-  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
+  transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 .bell:active { transform: scale(0.95); }
 .bell-ico {
@@ -623,7 +623,7 @@ input:focus-visible, select:focus-visible {
   background: none; border: 0; cursor: pointer;
   color: inherit; font-family: inherit;
   padding: var(--s4);
-  transition: background var(--fast) linear;
+  transition: background-color var(--fast) ease;   /* couleur -> ease, jamais linear */
 }
 .dhikr-tap:active { background: var(--surface); }
 .dhikr-tap:focus-visible { outline: 2px solid var(--accent); outline-offset: -6px; }
@@ -679,8 +679,10 @@ input:focus-visible, select:focus-visible {
   display: flex;                    /* neutralise le .hidden global */
   transform: translateY(-14px); opacity: 0;
   visibility: hidden; pointer-events: none;
-  transition: transform var(--mid) var(--ease), opacity var(--mid) var(--ease),
-              visibility 0s linear var(--mid);
+  /* Fermer suit un appui : la sortie claque (150 ms), l entree garde 240. */
+  transition: transform var(--tdev-close, 150ms) var(--ease),
+              opacity var(--tdev-close, 150ms) var(--ease),
+              visibility 0s linear var(--tdev-close, 150ms);
 }
 
 .reminder-body { display: flex; align-items: center; gap: var(--s3); flex: 1; min-width: 0; }
@@ -870,13 +872,14 @@ input:focus-visible, select:focus-visible {
 }
 #maj-banner.hidden {
   /* Reprend le dessus sur le .hidden global (display:none), qui rendrait
-     toute transition impossible. */
+     toute transition impossible. Sortie a 150 ms : « Plus tard » est une
+     DECISION — la reponse claque, seule l entree (systeme) prend 240 ms. */
   display: flex;
   transform: translateY(16px); opacity: 0;
   visibility: hidden; pointer-events: none;
-  transition: transform var(--mid) var(--ease),
-              opacity var(--mid) var(--ease),
-              visibility 0s linear var(--mid);
+  transition: transform var(--tdev-close, 150ms) var(--ease),
+              opacity var(--tdev-close, 150ms) var(--ease),
+              visibility 0s linear var(--tdev-close, 150ms);
 }
 #maj-banner button:active { transform: scale(0.97); }
 
@@ -980,8 +983,9 @@ input:focus-visible, select:focus-visible {
 #coran-player.hidden {
   display: flex;
   transform: translateY(16px); opacity: 0; visibility: hidden; pointer-events: none;
-  transition: transform var(--mid) var(--ease), opacity var(--mid) var(--ease),
-              visibility 0s linear var(--mid);
+  /* L arret est un geste : la disparition est la reponse — elle claque. */
+  transition: transform var(--tdev-close, 150ms) var(--ease), opacity var(--tdev-close, 150ms) var(--ease),
+              visibility 0s linear var(--tdev-close, 150ms);
 }
 .coran-player-txt { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .coran-player-txt strong { font-size: .92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
