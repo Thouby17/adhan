@@ -81,6 +81,21 @@
       .catch(e => done(false, e.message));
   }
 
+  // ---------- Toast (recette transitions.dev n°22) ----------------------
+  // Une confirmation TRANSITOIRE — « c est fait », puis on disparait. Les
+  // erreurs, elles, restent dans leurs panneaux : une erreur qui s efface
+  // toute seule est une erreur ratee.
+  let toastTimer = null;
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add("is-open");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("is-open"), 2600);
+  }
+  window.toast = toast;   // coran.js s en sert aussi
+
   // ---------- Outils ----------------------------------------------------
   function log(msg) {
     if (typeof console !== "undefined") console.log(msg);
@@ -984,6 +999,7 @@
       refreshDailyCache();
       majBoutonEnregistrer();
       log("Réglages enregistrés (" + store + ")");
+      toast("Réglages enregistrés");
       showView("today");
     });
   }
@@ -993,6 +1009,7 @@
       if (!ok) { showErrors({ stockage: "Remise à zéro impossible" + (err ? " (" + err + ")" : "") + "." }); return; }
       applyOverrides({}); refreshDailyCache(); fillSettingsForm();
       log("Réglages remis aux valeurs d'origine");
+      toast("Réglages remis aux valeurs d'origine");
     });
   }
 

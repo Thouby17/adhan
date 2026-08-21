@@ -10,8 +10,8 @@ android {
         // ⚠️ versionCode doit AUGMENTER a chaque version publiee : Android
         // refuse d'installer une version dont le numero est inferieur ou egal
         // a celui deja en place. C'est le seul numero qu il regarde.
-        versionCode 10
-        versionName "1.5.0"
+        versionCode 11
+        versionName "1.5.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Les bibliothèques AndroidX embarquent leurs traductions dans une

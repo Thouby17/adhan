@@ -1113,3 +1113,53 @@ input:focus-visible, select:focus-visible {
 /* #barres-liste : son identifiant (display:grid) pèse plus lourd qu une
    classe — il lui faut sa règle dédiée. */
 #barres-liste.hidden { display: none; }
+
+/* ---------- Toast (recette transitions.dev « Toast open/close ») ---------
+   Sonner est une bibliothèque React : cette app n a ni React ni build, par
+   doctrine. Même finalité, même école (l auteur du skill), zéro dépendance.
+   Asymétrie de la recette : arriver 350 ms (délibéré), partir 250 ms (vif). */
+:root {
+  --toast-open: 350ms;
+  --toast-close: 250ms;
+  --toast-distance: 16px;
+  --toast-blur: 2px;
+  --toast-scale: 0.97;
+  --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.t-toast {
+  position: fixed; left: 12px; right: 12px; margin: 0 auto;
+  width: fit-content; max-width: min(420px, calc(100vw - 24px));
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 65;                     /* au-dessus du lecteur (55) et de la
+                                      bannière (60), sous le sélecteur (70)
+                                      et l alarme (100) */
+  padding: 12px 18px; border-radius: var(--radius-sm);
+  background: var(--surface-up); border: 1px solid var(--line);
+  color: var(--text); font-size: var(--t-body); font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  text-align: center;
+  pointer-events: none;            /* transitoire : rien à toucher */
+  opacity: 0;
+  transform: translateY(var(--toast-distance)) scale(var(--toast-scale));
+  filter: blur(var(--toast-blur));
+  transition:
+    opacity var(--toast-close) var(--toast-ease),
+    transform var(--toast-close) var(--toast-ease),
+    filter var(--toast-close) var(--toast-ease);
+}
+.t-toast.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+  transition:
+    opacity var(--toast-open) var(--toast-ease),
+    transform var(--toast-open) var(--toast-ease),
+    filter var(--toast-open) var(--toast-ease);
+}
+/* Le lecteur Coran occupe déjà ce coin : le toast monte d un étage. */
+#app.avec-lecteur ~ .t-toast, #app.avec-lecteur .t-toast {
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 160px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-toast { transition: none !important; }
+}

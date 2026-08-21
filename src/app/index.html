@@ -399,6 +399,11 @@
 
     <audio id="coran-audio" preload="none"></audio>
 
+    <!-- Toast : confirmation transitoire (recette transitions.dev n°22).
+         Toujours dans le DOM, invisible replié — pas de .hidden ici, c est
+         .is-open qui pilote, pour que la transition joue dans les 2 sens. -->
+    <div id="toast" class="t-toast" role="status" aria-live="polite"></div>
+
     <div id="maj-banner" class="hidden" role="status">
       <div class="maj-txt">
         <strong>Mise à jour disponible</strong>

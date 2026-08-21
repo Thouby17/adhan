@@ -262,7 +262,10 @@
     // rien, on lui donne juste l'adresse et le titre.
     root.AdhanNative.coranCast(urlSourate(n), "Coran — " + SOURATES[n - 1][0])
       .then(function (r) {
-        if (r && r.ok) majTitre("Sur la barre : " + SOURATES[n - 1][0]);
+        if (r && r.ok) {
+          majTitre("Sur la barre : " + SOURATES[n - 1][0]);
+          if (root.toast) root.toast("Envoyé à la barre de son");
+        }
         else {
           etat.surBarre = false;
           majTitre("La barre n'a pas répondu" + (r && r.raison ? " — " + r.raison : "") +
@@ -292,6 +295,13 @@
     document.querySelectorAll("#coran-liste li").forEach(function (li) {
       if (li.dataset.url === url) li.classList.add("telechargee");
     });
+    // Confirmation transitoire : le telechargement s est fini tout seul, en
+    // arriere-plan — sans toast, personne ne saurait jamais qu il a abouti.
+    var m = url.match(/(d{3}).mp3$/);
+    var n = m ? Number(m[1]) : 0;
+    if (n >= 1 && n <= 114 && root.toast) {
+      root.toast(SOURATES[n - 1][0] + " est disponible hors ligne");
+    }
   }
 
   function majLecteur() {
