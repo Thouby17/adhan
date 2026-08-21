@@ -220,8 +220,8 @@
               <button type="button" id="btn-verif-maj">Vérifier les mises à jour</button>
             </div>
             <p class="set-help" id="reveil-etat">
-              Le seul test qui prouve vraiment quelque chose : posez la
-              tablette, <strong>éteignez l'écran</strong>, et attendez. Il
+              Le seul test qui prouve vraiment quelque chose : pose la
+              tablette, <strong>éteins l'écran</strong>, et attends. Il
               emprunte exactement le même chemin qu'une vraie prière.
             </p>
           </fieldset>
@@ -290,11 +290,11 @@
             <div class="set-grid-2">
               <div class="set-row w-sm">
                 <label for="set-lat">Latitude</label>
-                <input id="set-lat" type="number" step="0.0001" min="-90" max="90" inputmode="decimal">
+                <input id="set-lat" type="text" inputmode="decimal" autocomplete="off" min="-90" max="90" inputmode="decimal">
               </div>
               <div class="set-row w-sm">
                 <label for="set-lng">Longitude</label>
-                <input id="set-lng" type="number" step="0.0001" min="-180" max="180" inputmode="decimal">
+                <input id="set-lng" type="text" inputmode="decimal" autocomplete="off" min="-180" max="180" inputmode="decimal">
               </div>
             </div>
             <button id="btn-locate" class="btn btn-ghost">Utiliser ma position</button>
@@ -305,11 +305,11 @@
             <div class="set-grid-2">
               <div class="set-row w-xs">
                 <label for="set-fajr-angle">Angle du Fajr</label>
-                <input id="set-fajr-angle" type="number" step="0.5" min="8" max="24" inputmode="decimal">
+                <input id="set-fajr-angle" type="text" inputmode="decimal" autocomplete="off" min="8" max="24" inputmode="decimal">
               </div>
               <div class="set-row w-xs">
                 <label for="set-isha-angle">Angle de l'Isha</label>
-                <input id="set-isha-angle" type="number" step="0.5" min="8" max="24" inputmode="decimal">
+                <input id="set-isha-angle" type="text" inputmode="decimal" autocomplete="off" min="8" max="24" inputmode="decimal">
               </div>
             </div>
             <div class="set-row w-md">
@@ -349,6 +349,7 @@
           </div>
           <div class="set-actions">
             <button id="btn-set-reset" class="btn btn-quiet">Valeurs d'origine</button>
+            <button id="btn-set-reset-undo" class="btn btn-primary hidden">Annuler</button>
             <button id="btn-toggle-log" class="btn btn-quiet">Journal</button>
           </div>
 

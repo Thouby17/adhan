@@ -118,12 +118,16 @@ public class AdhanPlugin extends Plugin {
         }
         try {
             final Context ctx = getContext();
-            // On desarme d'abord l'ANCIENNE liste, avant de l'ecraser : une
-            // fois ecrasee, on ne saurait plus quoi annuler et il resterait
-            // des alarmes fantomes qui sonneraient a de vieilles heures.
-            AdhanAlarms.desarmer(ctx);
-            AdhanAlarms.enregistrer(ctx, alarmes);
-            final int armees = AdhanAlarms.armer(ctx);
+            final int armees;
+            // Serialise : deux programmations rapprochees entrelacaient
+            // desarmer/enregistrer/armer. Une ligne ferme le sujet.
+            synchronized (AdhanAlarms.class) {
+                // On desarme d'abord l'ANCIENNE liste, avant de l'ecraser :
+                // une fois ecrasee, on ne saurait plus quoi annuler.
+                AdhanAlarms.desarmer(ctx);
+                AdhanAlarms.enregistrer(ctx, alarmes);
+                armees = AdhanAlarms.armer(ctx);
+            }
 
             // A 5 h du matin le service joue sans page chargee : il ne pourra
             // rien lui demander. Elle depose donc ici ce dont il aura besoin.
@@ -298,6 +302,10 @@ public class AdhanPlugin extends Plugin {
                 .put("raison", "aucune barre configurée — Réglages → Chercher ma barre"));
             return;
         }
+        // Garder le service de veille debout : sans lui, Android peut tuer
+        // le processus en pleine sourate de 2 h — la barre continuerait
+        // (elle streame elle-meme) mais le bouton d'arret mourrait en silence.
+        demarrerVeilleInterne();
         new Thread(new Runnable() {
             @Override public void run() {
                 final CastSender.Resultat r = CastSender.jouerUrl(hote, url, titre);
@@ -311,7 +319,7 @@ public class AdhanPlugin extends Plugin {
 
     @PluginMethod
     public void coranCastArreter(PluginCall call) {
-        CastSender.arreterEnCours();
+        CastSender.arreterCoran();
         call.resolve();
     }
 

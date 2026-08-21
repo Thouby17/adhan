@@ -29,6 +29,7 @@ public class BootReceiver extends BroadcastReceiver {
         Log.i(TAG, "redemarrage detecte (" + action + ")");
 
         final int armees = AdhanAlarms.armer(context);
+        AdhanAlarms.rearmerEssai(context);
         Log.i(TAG, armees + " alarme(s) rearmee(s)");
 
         // On relance aussi la surveillance : la notification permanente est ce

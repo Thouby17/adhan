@@ -54,21 +54,33 @@ final class CastSender {
     private int requete = 1;
 
     /**
-     * La session active, pour pouvoir l'ARRETER de l'exterieur.
+     * Sessions actives, TYPEES, pour pouvoir les arreter de l'exterieur.
      *
-     * Trouve en relecture : le bouton « Arreter » de la notification coupait
-     * l'etat interne du service mais n'envoyait JAMAIS l'ordre a la barre —
-     * qui continuait les trois minutes. En pleine nuit, c'est exactement le
-     * bouton dont on a besoin, et il ne faisait rien.
+     * ⚠️ Deux lecons de relecture adverse :
+     * 1. Une seule reference partagee entre ADHAN et CORAN faisait que le
+     *    bouton « Arreter » de l'adhan tuait une ecoute Coran de deux heures
+     *    qui n'avait rien demande — et inversement.
+     * 2. La liberation etait inconditionnelle (enCoursDeLecture = null) :
+     *    la fin d'un adhan effacait l'enregistrement d'une session Coran
+     *    demarree entre-temps, rendant son bouton d'arret MORT pour toute
+     *    la duree de la sourate. On ne libere que SA PROPRE inscription
+     *    (comparaison d'identite).
      */
-    private static volatile CastSender enCoursDeLecture;
+    private static volatile CastSender adhanActif;
+    private static volatile CastSender coranActif;
     private volatile boolean arretDemande = false;
     private volatile int mediaSession = -1;
     private volatile String transportActif = null;
+    /** Prevenu une seule fois quand la barre confirme la lecture. */
+    private Runnable surLecture = null;
+    private boolean lectureAnnoncee = false;
 
-    /** Demande l'arret de la lecture Cast en cours, s'il y en a une. */
-    static void arreterEnCours() {
-        final CastSender s = enCoursDeLecture;
+    static void arreterAdhan() {
+        final CastSender s = adhanActif;
+        if (s != null) s.arretDemande = true;
+    }
+    static void arreterCoran() {
+        final CastSender s = coranActif;
         if (s != null) s.arretDemande = true;
     }
 
@@ -81,18 +93,28 @@ final class CastSender {
      * @param plancher volume minimum, ou une valeur negative pour ne jamais y toucher
      */
     static Resultat jouer(Context ctx, String hote, double plancher) {
+        return jouer(ctx, hote, plancher, null);
+    }
+
+    /**
+     * @param surLecture prevenu (une fois) des que la barre confirme
+     *        PLAYING — c'est ce qui permet au filet local de se couper
+     *        sans attendre la fin des trois minutes.
+     */
+    static Resultat jouer(Context ctx, String hote, double plancher, Runnable surLecture) {
         final CastSender s = new CastSender();
         final MediaHost serveur = new MediaHost();
-        enCoursDeLecture = s;
+        s.surLecture = surLecture;
+        adhanActif = s;
         try {
             final String url = serveur.demarrer(ctx);
             if (url == null) return new Resultat(false, "serveur local impossible");
             return s.derouler(hote, url, plancher, serveur);
         } catch (Exception e) {
             Log.e(TAG, "echec : " + e.getMessage(), e);
-            return new Resultat(false, e.getMessage());
+            return new Resultat(false, String.valueOf(e.getMessage()));
         } finally {
-            enCoursDeLecture = null;
+            if (adhanActif == s) adhanActif = null;   // jamais l'inscription d'un autre
             s.fermer();
             serveur.arreter();
         }
@@ -247,7 +269,13 @@ final class CastSender {
             if (ms >= 0) mediaSession = ms;
 
             final String etat = s0.optString("playerState", "");
-            if ("PLAYING".equals(etat)) aJoue = true;
+            if ("PLAYING".equals(etat)) {
+                aJoue = true;
+                if (!lectureAnnoncee && surLecture != null) {
+                    lectureAnnoncee = true;
+                    try { surLecture.run(); } catch (Exception ignored) {}
+                }
+            }
             if ("IDLE".equals(etat)) {
                 final String raison = s0.optString("idleReason", "");
                 if (aJoue || raison.length() > 0) {
@@ -293,7 +321,7 @@ final class CastSender {
      */
     static Resultat jouerUrl(final String hote, String url, String titre) {
         final CastSender s = new CastSender();
-        enCoursDeLecture = s;
+        coranActif = s;
         try {
             s.connecter(hote);
             s.envoyer(RECEPTEUR, CastProto.NS_CONNEXION, "{\"type\":\"CONNECT\"}");
@@ -321,7 +349,8 @@ final class CastSender {
                 }
             }
             if (transport == null || session == null) {
-                s.fermer(); enCoursDeLecture = null;
+                s.fermer();
+                if (coranActif == s) coranActif = null;
                 return new Resultat(false, "le recepteur ne s'est pas lance");
             }
 
@@ -356,13 +385,15 @@ final class CastSender {
                 final String etat = s0.optString("playerState", "");
                 if ("PLAYING".equals(etat) || "BUFFERING".equals(etat)) joue = true;
                 if ("IDLE".equals(etat) && s0.optString("idleReason", "").length() > 0) {
-                    s.fermer(); enCoursDeLecture = null;
+                    s.fermer();
+                    if (coranActif == s) coranActif = null;
                     return new Resultat(false, "la barre a refuse le flux ("
                         + s0.optString("idleReason") + ")");
                 }
             }
             if (!joue) {
-                s.fermer(); enCoursDeLecture = null;
+                s.fermer();
+                if (coranActif == s) coranActif = null;
                 return new Resultat(false, "lecture jamais demarree");
             }
 
@@ -377,7 +408,8 @@ final class CastSender {
             return new Resultat(true, "lecture demarree sur " + hote);
         } catch (Exception e) {
             Log.e(TAG, "coran cast : " + e.getMessage(), e);
-            s.fermer(); enCoursDeLecture = null;
+            s.fermer();
+            if (coranActif == s) coranActif = null;
             return new Resultat(false, String.valueOf(e.getMessage()));
         }
     }
@@ -422,7 +454,7 @@ final class CastSender {
         } catch (Exception e) {
             Log.w(TAG, "surveillance coran interrompue : " + e.getMessage());
         } finally {
-            if (enCoursDeLecture == this) enCoursDeLecture = null;
+            if (coranActif == this) coranActif = null;
             fermer();
         }
     }

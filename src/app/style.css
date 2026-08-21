@@ -321,7 +321,7 @@ html, body {
   max-height: calc(100vh - var(--tabbar-h) - 140px);
   max-height: calc(100dvh - var(--tabbar-h) - 140px);
 }
-.month-table { width: 100%; border-collapse: collapse; font-size: var(--t-micro); }
+.month-table { width: 100%; border-collapse: collapse; font-size: 15px; }  /* lisible à 2-3 m */
 .month-table th {
   position: sticky; top: 0; z-index: 1;
   background: var(--surface-up);
@@ -1153,9 +1153,9 @@ input:focus-visible, select:focus-visible {
   position: fixed; left: 12px; right: 12px; margin: 0 auto;
   width: fit-content; max-width: min(420px, calc(100vw - 24px));
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 12px);
-  z-index: 65;                     /* au-dessus du lecteur (55) et de la
-                                      bannière (60), sous le sélecteur (70)
-                                      et l alarme (100) */
+  z-index: 110;                    /* au-dessus de TOUT, alarme comprise :
+                                      purement informatif, pointer-events
+                                      none — il ne bloque jamais rien */
   padding: 12px 18px; border-radius: var(--radius-sm);
   background: var(--surface-up); border: 1px solid var(--line);
   color: var(--text); font-size: var(--t-body); font-weight: 600;

@@ -173,6 +173,12 @@ public final class AdhanAlarms {
             ctx, 999999, i,
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
+        // Persiste : une mise a jour de l'app (MY_PACKAGE_REPLACED) ou un
+        // redemarrage efface les alarmes — sans cette trace, un « test dans
+        // 10 min » suivi d'une mise a jour ne sonnait jamais, et l'utilisateur
+        // concluait a tort que le reveil est casse.
+        prefs(ctx).edit().putLong("essaiAt", quand).apply();
+
         try {
             final PendingIntent voir = PendingIntent.getActivity(
                 ctx, 999998, new Intent(ctx, MainActivity.class),
@@ -184,6 +190,15 @@ public final class AdhanAlarms {
             Log.e(TAG, "essai non arme : " + e.getMessage());
             return false;
         }
+    }
+
+    /** Rearme l'alarme d'essai si elle est encore a venir (apres reboot ou
+     *  mise a jour). */
+    public static void rearmerEssai(Context ctx) {
+        final long quand = prefs(ctx).getLong("essaiAt", 0L);
+        if (quand <= System.currentTimeMillis()) return;
+        final int minutes = (int) Math.max(1, (quand - System.currentTimeMillis()) / 60000L);
+        armerEssai(ctx, minutes);
     }
 
     /** Combien d'alarmes enregistrees sont encore dans le futur. */

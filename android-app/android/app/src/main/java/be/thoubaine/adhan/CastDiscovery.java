@@ -54,8 +54,14 @@ final class CastDiscovery {
                 verrou.acquire();
             }
 
-            socket = new MulticastSocket(PORT);
+            // ⚠️ setReuseAddress doit preceder le bind : le constructeur
+            // MulticastSocket(port) binde IMMEDIATEMENT — l'appel qui suivait
+            // etait sans effet, et un port 5353 deja tenu (autre service
+            // mDNS, deuxieme recherche simultanee) rendait la decouverte
+            // definitivement muette.
+            socket = new MulticastSocket(null);
             socket.setReuseAddress(true);
+            socket.bind(new java.net.InetSocketAddress(PORT));
             socket.setSoTimeout(700);
             final InetAddress groupe = InetAddress.getByName(GROUPE);
             socket.joinGroup(groupe);

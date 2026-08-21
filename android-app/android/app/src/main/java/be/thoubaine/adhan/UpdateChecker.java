@@ -73,14 +73,16 @@ final class UpdateChecker {
                              + (code == 403 ? " (limite de requêtes — réessayer plus tard)" : ""));
             }
 
-            final StringBuilder sb = new StringBuilder();
+            // Accumuler les OCTETS puis decoder UNE fois : decoder bloc par
+            // bloc coupait un accent a cheval sur deux blocs de 8 Ko.
+            final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
             final InputStream in = c.getInputStream();
             final byte[] buf = new byte[8192];
             int n;
-            while ((n = in.read(buf)) > 0) sb.append(new String(buf, 0, n, CastProto.UTF8));
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
             in.close();
 
-            final JSONObject rel = new JSONObject(sb.toString());
+            final JSONObject rel = new JSONObject(new String(bos.toByteArray(), CastProto.UTF8));
             final String tag = rel.optString("tag_name", "").replaceFirst("^v", "");
 
             String url = null;
@@ -171,6 +173,7 @@ final class UpdateChecker {
             c.setConnectTimeout(10000);
             c.setReadTimeout(30000);
 
+            final long attendu = c.getContentLengthLong();
             final InputStream in = c.getInputStream();
             final FileOutputStream out = new FileOutputStream(dest);
             final byte[] buf = new byte[64 * 1024];
@@ -179,7 +182,16 @@ final class UpdateChecker {
             while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); total += n; }
             out.close();
             in.close();
-            Log.i(TAG, "APK telechargee : " + total + " octets");
+            Log.i(TAG, "APK telechargee : " + total + " octets (annonces : " + attendu + ")");
+
+            // Un telechargement TRONQUE passerait le garde-fou de taille et
+            // produirait un « package invalide » incomprehensible a
+            // l'installation : comparer a la longueur annoncee.
+            if (attendu > 0 && total != attendu) {
+                return r.put("ok", false)
+                        .put("raison", "téléchargement incomplet (" + total + "/" + attendu
+                             + " octets) — réessayer");
+            }
 
             // Garde-fou : une page d'erreur HTML pese quelques Ko, une APK
             // plusieurs Mo. Installer un fichier tronque echouerait avec un

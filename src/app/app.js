@@ -433,7 +433,12 @@
     if (!v.ok) return;
     const next = S.diff(DEFAULTS, S.effective(DEFAULTS, Object.assign({}, overrides, v.values)));
     persistSettings(next, function (ok, err) {
-      if (!ok) { log("Réglage non enregistré : " + (err || "stockage indisponible")); return; }
+      if (!ok) {
+        log("Réglage non enregistré : " + (err || "stockage indisponible"));
+        // La cloche paraîtrait morte sans un mot : l'échec doit se voir.
+        toast("Réglage non enregistré — réessaie");
+        return;
+      }
       applyOverrides(next);
       refreshDailyCache();
       renderRows();
@@ -587,8 +592,16 @@
     // saute de ~358 et la transition CSS balayait presque un tour complet
     // dans le mauvais sens. On fournit le plus court chemin, en continu.
     var cible = -state.heading;
-    if (state.rotorAngle == null) state.rotorAngle = cible;
-    else state.rotorAngle += ((cible - state.rotorAngle + 540) % 360) - 180;
+    if (state.rotorAngle == null) {
+      // Première valeur NORMALISÉE dans (-180, 180] : partir de -350 aurait
+      // fait balayer 350° au premier relevé depuis le rotate(0) initial.
+      state.rotorAngle = ((cible % 360) + 540) % 360 - 180;
+    } else {
+      // Double modulo : le % de JavaScript est un RESTE SIGNÉ — après deux
+      // tours accumulés, l'ancienne formule sortait de [-180, 180] et le
+      // cadran repartait pour le grand tour qu'elle devait empêcher.
+      state.rotorAngle += (((cible - state.rotorAngle) % 360) + 540) % 360 - 180;
+    }
     rotor.setAttribute("transform", "rotate(" + state.rotorAngle.toFixed(1) + " 100 100)");
     dom.qiblaHint.textContent = "Tourne-toi jusqu'à ce que l'aiguille pointe vers le haut.";
   }
@@ -597,7 +610,7 @@
     const grant = function () {
       window.addEventListener("deviceorientationabsolute", onOrient, true);
       window.addEventListener("deviceorientation", onOrient, true);
-      dom.btnCompass.textContent = "Boussole activée";
+      dom.btnCompass.textContent = "Recherche du nord…";
       setTimeout(function () {
         if (state.heading === null) {
           dom.qiblaHint.textContent =
@@ -620,6 +633,10 @@
   }
 
   function onOrient(e) {
+    // Premier cap réellement reçu : LÀ on peut annoncer que ça marche.
+    if (dom.btnCompass && dom.btnCompass.textContent === "Recherche du nord…") {
+      dom.btnCompass.textContent = "Boussole activée";
+    }
     let h = null;
     if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;
     else if (e.absolute && typeof e.alpha === "number") h = 360 - e.alpha;
@@ -678,6 +695,11 @@
     if (name !== "coran") {
       const pk = document.getElementById("coran-picker");
       if (pk) pk.classList.add("hidden");
+      // Le panneau texte est plein écran : changer d'onglet doit le ranger
+      // proprement (en sortant du mode texte, pour que l'audio suive).
+      const tx = document.getElementById("coran-texte");
+      const txFermer = document.getElementById("coran-texte-fermer");
+      if (tx && !tx.classList.contains("hidden") && txFermer) txFermer.click();
     }
   }
 
@@ -721,6 +743,9 @@
   }
 
   function tapDhikr() {
+    // Passage de minuit compteur ouvert : recharger le jour courant, sinon
+    // les récitations de 00 h 10 créditaient la veille.
+    if (dhikr.day !== dayKey(new Date())) loadDhikr();
     const d = curDhikr();
     const before = curCount();
     dhikr.counts[dhikr.cur] = before + 1;
@@ -738,6 +763,10 @@
 
   let dhikrUndoTimer = null;
   function resetDhikr() {
+    // Un dhikr déjà vide : rien à remettre à zéro, et surtout ne pas
+    // ressusciter le bouton Annuler d'une remise à zéro ancienne (voire
+    // d'un AUTRE dhikr).
+    if (curCount() === 0) return;
     // Remise à zéro immédiate + ANNULER, plutôt qu'une confirmation : perdre
     // 90 récitations sur une fausse manœuvre serait cruel, et une popup de
     // confirmation finit par se cliquer sans lire.
@@ -750,7 +779,10 @@
     saveDhikr(); renderDhikr();
     dom.dhikrUndoBtn.classList.remove("hidden");
     if (dhikrUndoTimer) clearTimeout(dhikrUndoTimer);
-    dhikrUndoTimer = setTimeout(() => dom.dhikrUndoBtn.classList.add("hidden"), 8000);
+    dhikrUndoTimer = setTimeout(() => {
+      dom.dhikrUndoBtn.classList.add("hidden");
+      dhikrUndo = null;   // l'offre expirée ne doit plus être restaurable
+    }, 8000);
   }
 
   function undoDhikr() {
@@ -870,6 +902,15 @@
   // dejaJoue : le service Android a DEJA lancé le son et nous prévient. Le
   // rejouer ici superposerait deux adhans décalés d'une seconde.
   function switchToAlarm(prayer, screenTriggered, dejaJoue) {
+    // L'adhan a priorité : couper la récitation du Coran AVANT de sonner —
+    // sinon deux voix se superposent au moment le plus solennel de l'app.
+    if (window.AdhanCoran && window.AdhanCoran.pause) window.AdhanCoran.pause();
+    // ⚠️ Marquer la prière comme sonnée QUELLE QUE SOIT l'origine (service
+    // webOS, hash, écran) : sur TV, « Arrêter » dans la fenêtre de 2 min
+    // relançait l'adhan à zéro — tickSlow ne voyait pas fired.
+    if (prayer && prayer !== "test") {
+      state.fired[dayKey(new Date()) + ":" + prayer] = true;
+    }
     fromScreen = !!screenTriggered;
     stopTimers();
     dom.alarm.classList.remove("hidden");
@@ -967,7 +1008,12 @@
   function readForm() {
     const on = [];
     dom.setPrayers.querySelectorAll("input").forEach(i => { if (i.checked) on.push(i.value); });
-    const num = elm => elm.value.trim() === "" ? NaN : Number(elm.value);
+    // « 50,85 » à la française vaut « 50.85 » : les exemples des messages
+    // d'erreur utilisent la virgule — la refuser ici rendait l'aide piégeuse.
+    const num = elm => {
+      const s = elm.value.trim().replace(",", ".");
+      return s === "" ? NaN : Number(s);
+    };
     return {
       placeName: dom.setPlace.value.trim(),
       latitude: num(dom.setLat), longitude: num(dom.setLng),
@@ -1031,8 +1077,8 @@
     const next = S.diff(DEFAULTS, S.effective(DEFAULTS, Object.assign({}, overrides, v.values)));
     persistSettings(next, function (ok, err) {
       if (!ok) {
-        showErrors({ stockage: "Enregistrement impossible" + (err ? " (" + err + ")" : "") +
-          ". Les réglages restent ceux d'avant." });
+        log("Enregistrement : " + (err || "?"));
+        showErrors({ stockage: "Enregistrement impossible. Les réglages restent ceux d'avant." });
         return;
       }
       applyOverrides(next);
@@ -1040,16 +1086,48 @@
       majBoutonEnregistrer();
       log("Réglages enregistrés (" + store + ")");
       toast("Réglages enregistrés");
+      // Barre choisie sans adresse : le dire MAINTENANT — l'adhan sortira de
+      // la tablette en attendant (le repli local existe côté Android).
+      if (cfg.audioOutput !== "local" && !cfg.castHost) {
+        etatBarre("Aucune adresse de barre : utilise « Chercher ma barre ». "
+          + "En attendant, l'adhan sortira de la tablette.", false);
+      }
       showView("today");
     });
   }
 
+  // Un tap efface tout : le même filet que le dhikr — 8 secondes pour
+  // annuler, plutôt qu'une popup de confirmation qu'on clique sans lire.
+  let reglagesAvantReset = null, resetUndoTimer = null;
   function resetSettings() {
     persistSettings({}, function (ok, err) {
-      if (!ok) { showErrors({ stockage: "Remise à zéro impossible" + (err ? " (" + err + ")" : "") + "." }); return; }
+      if (!ok) { log("Remise à zéro : " + (err || "?")); showErrors({ stockage: "Remise à zéro impossible." }); return; }
+      reglagesAvantReset = overrides;
       applyOverrides({}); refreshDailyCache(); fillSettingsForm();
       log("Réglages remis aux valeurs d'origine");
-      toast("Réglages remis aux valeurs d'origine");
+      toast("Réglages remis à zéro — touche « Annuler » pour revenir");
+      const btn = document.getElementById("btn-set-reset-undo");
+      if (btn) {
+        btn.classList.remove("hidden");
+        if (resetUndoTimer) clearTimeout(resetUndoTimer);
+        resetUndoTimer = setTimeout(() => {
+          btn.classList.add("hidden");
+          reglagesAvantReset = null;
+        }, 8000);
+      }
+    });
+  }
+  function undoResetSettings() {
+    if (!reglagesAvantReset) return;
+    const avant = reglagesAvantReset;
+    reglagesAvantReset = null;
+    if (resetUndoTimer) clearTimeout(resetUndoTimer);
+    const btn = document.getElementById("btn-set-reset-undo");
+    if (btn) btn.classList.add("hidden");
+    persistSettings(avant, function (ok) {
+      if (!ok) { toast("Restauration impossible"); return; }
+      applyOverrides(avant); refreshDailyCache(); fillSettingsForm();
+      toast("Réglages restaurés");
     });
   }
 
@@ -1148,6 +1226,7 @@
     g("btn-set-save").addEventListener("click", saveSettings);
     g("btn-set-cancel").addEventListener("click", () => showView("today"));
     g("btn-set-reset").addEventListener("click", resetSettings);
+    g("btn-set-reset-undo").addEventListener("click", undoResetSettings);
     g("btn-toggle-log").addEventListener("click", () => dom.logArea.classList.toggle("visible"));
     dom.btnLocate.addEventListener("click", locate);
     ["set-lat", "set-lng", "set-fajr-angle", "set-isha-angle", "set-asr", "set-highlats", "set-reminder"]
@@ -1164,8 +1243,11 @@
     document.addEventListener("keydown", function (e) {
       if (e.keyCode !== 27 && e.keyCode !== 461) return;
       const pk = document.getElementById("coran-picker");
+      const tx = document.getElementById("coran-texte");
+      const txFermer = document.getElementById("coran-texte-fermer");
       if (!dom.alarm.classList.contains("hidden")) { closeAlarm(); e.preventDefault(); }
       else if (pk && !pk.classList.contains("hidden")) { pk.classList.add("hidden"); e.preventDefault(); }
+      else if (tx && !tx.classList.contains("hidden") && txFermer) { txFermer.click(); e.preventDefault(); }
       else if (!dom.dhikr.classList.contains("hidden")) { closeDhikr(); e.preventDefault(); }
     });
 
@@ -1289,7 +1371,7 @@
       const li = el("li", "barre-item" + (b.ip === choisi ? " selected" : ""));
       li.style.setProperty("--i", i);
       const txt = el("div", "barre-txt");
-      txt.appendChild(el("strong", null, b.nom || "Appareil Cast"));
+      txt.appendChild(el("strong", null, b.nom || "Barre de son"));
       txt.appendChild(el("span", null, b.ip + (b.enLigne ? "" : " — vue précédemment")));
       li.appendChild(txt);
       if (b.connue) li.appendChild(el("span", "barre-badge", "utilisée"));
@@ -1335,7 +1417,8 @@
           etatBarre("Aucun appareil trouvé. Vérifie que la tablette et la barre "
                   + "sont sur le MÊME réseau Wi-Fi — c'est la cause la plus fréquente.", false);
         } else {
-          etatBarre(l.length + " appareil(s) trouvé(s) — touche celui à utiliser.", true);
+          etatBarre((l.length === 1 ? "1 appareil trouvé"
+                    : l.length + " appareils trouvés") + " — touche celui à utiliser.", true);
         }
       }).catch(e => etatBarre("Recherche impossible : " + e.message, false))
         .then(() => { chercher.disabled = false; });
@@ -1344,7 +1427,7 @@
     tester.addEventListener("click", function () {
       if (!natif()) { etatBarre("L'essai n'existe que dans l'application Android.", false); return; }
       const hote = dom.setCastHost.value.trim();
-      if (!hote) { etatBarre("Indiquez d'abord une adresse, ou lancez une recherche.", false); return; }
+      if (!hote) { etatBarre("Indique d'abord une adresse, ou lance une recherche.", false); return; }
       tester.disabled = true;
       etatBarre("Envoi à " + hote + "… la barre peut mettre 2 secondes à se réveiller.");
       N.testerBarre(hote).then(function (r) {
@@ -1374,12 +1457,12 @@
         if (r && r.ok) {
           const t = new Date(r.quand);
           etat.innerHTML = "<strong>Réveil programmé à " + hm(t) + ".</strong> "
-            + "Éteignez l'écran maintenant et attendez : l'écran doit se "
+            + "Éteins l'écran maintenant et attends : l'écran doit se "
             + "rallumer tout seul et l'adhan retentir. Si rien ne se passe, "
             + "les autorisations ci-dessus sont en cause.";
         } else {
           etat.textContent = "Android a refusé de programmer l'alarme. "
-            + "Vérifiez la pastille « Alarmes à l'heure exacte » ci-dessus.";
+            + "Vérifie la pastille « Alarmes à l'heure exacte » ci-dessus.";
         }
       }).catch(e => { etat.textContent = "Impossible : " + e.message; })
         .then(() => { b.disabled = false; });
@@ -1417,7 +1500,7 @@
       if (!r.plusRecente) {
         log("À jour (v" + r.actuelle + ")");
         if (manuel && etat) etat.textContent =
-          "L application est à jour (version " + r.actuelle + ").";
+          "L'application est à jour (version " + r.actuelle + ").";
         return;
       }
       majInfo = r;
@@ -1425,7 +1508,7 @@
       if (v) v.textContent = "v" + r.actuelle + " → v" + r.derniere +
         " (" + Math.round((r.taille || 0) / 1024) + " Ko)";
       document.getElementById("maj-banner").classList.remove("hidden");
-      if (manuel && etat) etat.textContent = "Version " + r.derniere + " disponible — voir en bas de l écran.";
+      if (manuel && etat) etat.textContent = "Version " + r.derniere + " disponible — voir en bas de l'écran.";
     }).catch(e => log("⚠ Contrôle de mise à jour : " + e.message));
   }
 
@@ -1447,7 +1530,7 @@
           banner.classList.add("hidden");
         } else if (r && r.autorisationRequise) {
           const v = document.getElementById("maj-version");
-          if (v) v.textContent = "Autorise l installation dans l écran ouvert, puis reviens appuyer sur Installer.";
+          if (v) v.textContent = "Autorise l'installation dans l'écran ouvert, puis reviens appuyer sur Installer.";
         } else {
           const v = document.getElementById("maj-version");
           if (v) v.textContent = "Échec : " + ((r && r.raison) || "réessayer plus tard");
@@ -1487,7 +1570,8 @@
       const armees = document.getElementById("diag-armees");
       if (armees) {
         armees.textContent = e.alarmesArmees > 0
-          ? e.alarmesArmees + " alarme(s) programmée(s)" +
+          ? (e.alarmesArmees === 1 ? "1 alarme programmée"
+             : e.alarmesArmees + " alarmes programmées") +
             (e.prochaineAlarme ? " — prochaine à " + hm(new Date(e.prochaineAlarme)) : "")
           : "Aucune alarme programmée";
       }
