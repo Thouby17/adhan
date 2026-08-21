@@ -155,32 +155,7 @@
 
         <ul id="coran-liste"></ul>
 
-        <!-- Lecteur : apparaît quand une sourate joue. -->
-        <div id="coran-player" class="hidden">
-          <div class="coran-player-txt">
-            <strong id="coran-titre"></strong>
-            <span id="coran-temps">--:-- / --:--</span>
-          </div>
-          <input type="range" id="coran-seek" min="0" max="1000" value="0"
-                 aria-label="Position de lecture">
-          <div class="coran-player-btns">
-            <button type="button" id="coran-play" aria-label="Lecture ou pause">▶</button>
-            <button type="button" id="coran-barre-btn">Sur la barre</button>
-            <button type="button" id="coran-stop" aria-label="Arrêter">■</button>
-          </div>
-        </div>
 
-        <!-- Choix du récitateur : recouvre l'écran, se ferme d'un geste. -->
-        <div id="coran-picker" class="hidden">
-          <div class="coran-picker-tete">
-            <input type="search" id="coran-recherche" placeholder="Chercher un récitateur…"
-                   autocomplete="off">
-            <button type="button" id="coran-picker-fermer">Fermer</button>
-          </div>
-          <ul id="coran-recit-liste"></ul>
-        </div>
-
-        <audio id="coran-audio" preload="none"></audio>
       </section>
 
       <section id="view-settings" class="view hidden">
@@ -242,7 +217,6 @@
             </ul>
             <div class="set-actions">
               <button type="button" id="btn-test-reveil">Tester le réveil dans 2 minutes</button>
-              <button type="button" id="btn-verif-maj">Vérifier les mises à jour</button>
               <button type="button" id="btn-verif-maj">Vérifier les mises à jour</button>
             </div>
             <p class="set-help" id="reveil-etat">
@@ -393,6 +367,38 @@
     <!-- Banniere de mise a jour : n apparait que dans l APK, quand une
          version plus recente est publiee. « Plus tard » la ferme ; elle ne
          reviendra qu au prochain demarrage. -->
+    <!-- ⚠️ Ces surfaces sont en position:fixed : elles doivent vivre HORS
+         des sections .view, dont l'animation d'entrée (transform) fait
+         de la section leur bloc conteneur — le lecteur atterrissait alors
+         tout en bas des 114 lignes de la liste au lieu du bas de l'écran.
+         Bug constaté sur l'appareil réel. -->
+    <!-- Lecteur : apparaît quand une sourate joue. -->
+    <div id="coran-player" class="hidden">
+      <div class="coran-player-txt">
+        <strong id="coran-titre"></strong>
+        <span id="coran-temps">--:-- / --:--</span>
+      </div>
+      <input type="range" id="coran-seek" min="0" max="1000" value="0"
+             aria-label="Position de lecture">
+      <div class="coran-player-btns">
+        <button type="button" id="coran-play" aria-label="Lecture ou pause">▶</button>
+        <button type="button" id="coran-barre-btn">Sur la barre</button>
+        <button type="button" id="coran-stop" aria-label="Arrêter">■</button>
+      </div>
+    </div>
+
+    <!-- Choix du récitateur : recouvre l'écran, se ferme d'un geste. -->
+    <div id="coran-picker" class="hidden">
+      <div class="coran-picker-tete">
+        <input type="search" id="coran-recherche" placeholder="Chercher un récitateur…"
+               autocomplete="off">
+        <button type="button" id="coran-picker-fermer">Fermer</button>
+      </div>
+      <ul id="coran-recit-liste"></ul>
+    </div>
+
+    <audio id="coran-audio" preload="none"></audio>
+
     <div id="maj-banner" class="hidden" role="status">
       <div class="maj-txt">
         <strong>Mise à jour disponible</strong>

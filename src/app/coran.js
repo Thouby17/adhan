@@ -82,10 +82,20 @@
     enCache: {},           // url -> true (badges « téléchargée »)
     enLecture: null,       // numéro de sourate en cours, ou null
     surBarre: false,
-    blobUrl: null          // à révoquer avant d'en créer un autre
+    blobUrl: null,         // à révoquer avant d'en créer un autre
+    seq: 0,                // jeton de génération : deux touchers rapides, seul le dernier gagne
+    dlCtrl: null           // téléchargement d'arrière-plan en cours, pour l'annuler
   };
 
   function $(id) { return document.getElementById(id); }
+  // Les <li> cliquables doivent aussi repondre au clavier/D-pad : focusables,
+  // et Entree/Espace vaut un toucher.
+  function cliquable(li) {
+    li.tabIndex = 0;
+    li.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); li.click(); }
+    });
+  }
   function lireJson(cle) { try { return JSON.parse(localStorage.getItem(cle)); } catch (e) { return null; } }
   function ecrireJson(cle, v) { try { localStorage.setItem(cle, JSON.stringify(v)); } catch (e) {} }
   var natif = function () { return !!(root.AdhanNative && root.AdhanNative.dispo()); };
@@ -111,7 +121,11 @@
       return Promise.resolve(true);
     }
     if (typeof fetch !== "function") return Promise.resolve(false);
-    return fetch(API)
+    // Délai borné (le garde-fou qu'a déjà loadSettings) : un réseau qui
+    // pend laissait « Chargement du catalogue… » à l'infini.
+    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    if (ctrl) setTimeout(function () { ctrl.abort(); }, 10000);
+    return fetch(API, ctrl ? { signal: ctrl.signal } : undefined)
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (j) {
         // On ne garde que l'utile : le catalogue complet pèserait cher en
@@ -148,11 +162,16 @@
   }
   function cacherEnArrierePlan(url) {
     if (!root.caches || etat.enCache[url]) return;
+    // Un seul téléchargement d'arrière-plan à la fois : enchaîner les
+    // sourates empilait des copies intégrales concurrentes du flux d'écoute.
+    if (etat.dlCtrl) { try { etat.dlCtrl.abort(); } catch (e) {} }
+    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    etat.dlCtrl = ctrl;
     ouvrirCache().then(function (c) {
       if (!c) return;
       // fetch séparé du flux de lecture : le <audio> lit en continu pendant
       // que cette copie intégrale se range pour les prochaines fois.
-      fetch(url).then(function (r) {
+      fetch(url, ctrl ? { signal: ctrl.signal } : undefined).then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return c.put(url, r);
       }).then(function () {
@@ -168,8 +187,13 @@
     var audio = $("coran-audio");
     etat.enLecture = n;
     etat.surBarre = false;
+    // Course : toucher la sourate 2 puis vite la 3 lançait deux chaînes
+    // asynchrones ; si la plus lente finissait dernière, elle écrasait la
+    // lecture ET révoquait le blob de la gagnante. Le jeton tranche.
+    var jeton = ++etat.seq;
 
     var demarrer = function (src) {
+      if (jeton !== etat.seq) return;   // un toucher plus récent a gagné
       if (etat.blobUrl) { try { URL.revokeObjectURL(etat.blobUrl); } catch (e) {} etat.blobUrl = null; }
       audio.src = src;
       // Reprise : si on rouvre LA sourate interrompue, on repart où on était.
@@ -212,6 +236,10 @@
     var audio = $("coran-audio");
     try { audio.pause(); audio.currentTime = 0; } catch (e) {}
     audio.removeAttribute("src"); audio.load();
+    // Libérer le blob (une longue sourate = des dizaines de Mo retenus) et
+    // couper le téléchargement d'arrière-plan devenu inutile.
+    if (etat.blobUrl) { try { URL.revokeObjectURL(etat.blobUrl); } catch (e) {} etat.blobUrl = null; }
+    if (etat.dlCtrl) { try { etat.dlCtrl.abort(); } catch (e) {} etat.dlCtrl = null; }
     if (etat.surBarre && natif()) root.AdhanNative.coranCastArreter().catch(function () {});
     etat.enLecture = null;
     etat.surBarre = false;
@@ -270,6 +298,10 @@
     var bar = $("coran-player");
     if (!bar) return;
     bar.classList.toggle("hidden", etat.enLecture == null);
+    // Le lecteur persiste sur tous les onglets : chaque vue réserve la place
+    // en bas, sinon les boutons de fin de page restent enterrés sous lui.
+    var app = document.getElementById("app");
+    if (app) app.classList.toggle("avec-lecteur", etat.enLecture != null);
     if (etat.enLecture == null) return;
 
     var s = SOURATES[etat.enLecture - 1];
@@ -313,6 +345,7 @@
       li.addEventListener("click", (function (num2) {
         return function () { jouer(num2); };
       })(n));
+      cliquable(li);
       ul.appendChild(li);
     }
   }
@@ -333,6 +366,7 @@
         var b = document.createElement("span"); b.textContent = m.nom;
         li.appendChild(a); li.appendChild(b);
         if (etat.choix && etat.choix.serveur === m.srv) li.className = "selected";
+        cliquable(li);
         li.addEventListener("click", function () {
           etat.choix = { recitateur: r.n, moshaf: m.nom, serveur: m.srv, liste: m.liste || null };
           ecrireJson(CLE_CHOIX, etat.choix);
@@ -417,7 +451,17 @@
     $("coran-recit-btn").addEventListener("click", function () {
       $("coran-picker").classList.remove("hidden");
       $("coran-recherche").value = "";
-      chargerCatalogue(false).then(function () { renderPicker(""); });
+      // Premiere ouverture sans cache : dire qu on travaille plutot que de
+      // montrer un ecran vide pendant le chargement du catalogue.
+      if (!etat.catalogue) {
+        var ul = $("coran-recit-liste");
+        ul.textContent = "";
+        var att = document.createElement("li");
+        att.className = "vide";
+        att.textContent = "Chargement du catalogue…";
+        ul.appendChild(att);
+      }
+      chargerCatalogue(false).then(function () { renderPicker($("coran-recherche").value); });
       setTimeout(function () { $("coran-recherche").focus(); }, 250);
     });
     $("coran-picker-fermer").addEventListener("click", function () {

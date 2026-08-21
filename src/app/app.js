@@ -36,7 +36,8 @@
     view: "today", monthCursor: null, reminded: {},
     lastCount: "", lastNextId: "",
     fastTimer: null, slowTimer: null,
-    heading: null            // cap de la boussole, si disponible
+    heading: null,           // cap de la boussole, si disponible
+    rotorAngle: null         // angle DEPLIE du cadran (continu, jamais replie)
   };
 
   // ---------- Préférences : le service fait autorité s'il répond ---------
@@ -413,7 +414,7 @@
     if (prev) {
       const total = next.at - prev.at;
       const done = Math.min(1, Math.max(0, (now - prev.at) / total));
-      dom.progFill.style.width = (done * 100).toFixed(2) + "%";
+      dom.progFill.style.transform = "scaleX(" + done.toFixed(4) + ")";
       dom.progFrom.textContent = LABELS[prev.prayer] + " " + hm(prev.at);
       dom.progTo.textContent = LABELS[next.prayer] + " " + hm(next.at);
     }
@@ -527,7 +528,13 @@
         PrayTimes.qiblaBearing(cfg.latitude, cfg.longitude).toFixed(0) + "° depuis le nord.";
       return;
     }
-    rotor.setAttribute("transform", "rotate(" + (-state.heading).toFixed(1) + " 100 100)");
+    // Depliage de l angle : au passage du nord (359->1), la valeur brute
+    // saute de ~358 et la transition CSS balayait presque un tour complet
+    // dans le mauvais sens. On fournit le plus court chemin, en continu.
+    var cible = -state.heading;
+    if (state.rotorAngle == null) state.rotorAngle = cible;
+    else state.rotorAngle += ((cible - state.rotorAngle + 540) % 360) - 180;
+    rotor.setAttribute("transform", "rotate(" + state.rotorAngle.toFixed(1) + " 100 100)");
     dom.qiblaHint.textContent = "Tourne-toi jusqu'à ce que l'aiguille pointe vers le haut.";
   }
 
@@ -613,6 +620,10 @@
     if (name === "month") renderMonth();
     if (name === "settings") fillSettingsForm();
     if (name === "coran" && window.AdhanCoran) window.AdhanCoran.afficher();
+    if (name !== "coran") {
+      const pk = document.getElementById("coran-picker");
+      if (pk) pk.classList.add("hidden");
+    }
   }
 
   // ---------- Compteur de dhikr ------------------------------------------
@@ -670,16 +681,21 @@
     } catch (e) {}
   }
 
+  let dhikrUndoTimer = null;
   function resetDhikr() {
     // Remise à zéro immédiate + ANNULER, plutôt qu'une confirmation : perdre
     // 90 récitations sur une fausse manœuvre serait cruel, et une popup de
     // confirmation finit par se cliquer sans lire.
-    dhikrUndo = { id: dhikr.cur, n: curCount() };
+    // ⚠️ Un DOUBLE appui ne doit pas détruire l'annulation : le second
+    // écrasait dhikrUndo par { n: 0 } (le compteur est déjà vide) et le
+    // minuteur du premier masquait « Annuler » trop tôt.
+    if (curCount() > 0) dhikrUndo = { id: dhikr.cur, n: curCount() };
     dhikr.total = Math.max(0, dhikr.total - curCount());
     dhikr.counts[dhikr.cur] = 0;
     saveDhikr(); renderDhikr();
     dom.dhikrUndoBtn.classList.remove("hidden");
-    setTimeout(() => dom.dhikrUndoBtn.classList.add("hidden"), 8000);
+    if (dhikrUndoTimer) clearTimeout(dhikrUndoTimer);
+    dhikrUndoTimer = setTimeout(() => dom.dhikrUndoBtn.classList.add("hidden"), 8000);
   }
 
   function undoDhikr() {
@@ -1090,7 +1106,9 @@
 
     document.addEventListener("keydown", function (e) {
       if (e.keyCode !== 27 && e.keyCode !== 461) return;
+      const pk = document.getElementById("coran-picker");
       if (!dom.alarm.classList.contains("hidden")) { closeAlarm(); e.preventDefault(); }
+      else if (pk && !pk.classList.contains("hidden")) { pk.classList.add("hidden"); e.preventDefault(); }
       else if (!dom.dhikr.classList.contains("hidden")) { closeDhikr(); e.preventDefault(); }
     });
 
@@ -1218,6 +1236,10 @@
       txt.appendChild(el("span", null, b.ip + (b.enLigne ? "" : " — vue précédemment")));
       li.appendChild(txt);
       if (b.connue) li.appendChild(el("span", "barre-badge", "utilisée"));
+      li.tabIndex = 0;
+      li.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); li.click(); }
+      });
       li.addEventListener("click", function () {
         dom.setCastHost.value = b.ip;
         majHistoriqueBarre(b.ip, b.nom);

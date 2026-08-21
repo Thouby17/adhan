@@ -37,6 +37,15 @@
   --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
 
   --radius: 16px;
+
+  /* Surfaces et etats — utilises par Coran, diagnostic, lecteur. Ils
+     vivaient en valeurs de secours codees en dur, hors palette. */
+  --surface-1: var(--surface-up);
+  --surface-2: hsla(226, 30%, 90%, 0.04);
+  --surface-3: hsla(226, 30%, 90%, 0.08);
+  --muted: var(--text-3);
+  --ok:   hsl(143, 57%, 48%);
+  --warn: hsl(36, 79%, 58%);
   --radius-sm: 10px;
 
   /* --- Mouvement : 2 durées, 1 courbe. Rien de plus. */
@@ -48,6 +57,8 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+
 
 html, body {
   height: 100%;
@@ -89,8 +100,11 @@ html, body {
 
 /* Fade through : les onglets n'ont pas de relation spatiale entre eux,
    c'est la transition qui convient (et la plus discrète). */
-@keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.view:not(.hidden) { animation: view-in var(--mid) var(--ease) both; }
+/* Fondu PUR et bref : on change d onglet des dizaines de fois par jour —
+   pas de glissement qui fait attendre, et plus AUCUN transform d ancetre
+   susceptible de pieger un position:fixed. */
+@keyframes view-in { from { opacity: 0; } }
+.view:not(.hidden) { animation: view-in var(--fast) var(--ease) backwards; }
 
 /* ------------------------------------------------------------- BANDEAU */
 .topbar {
@@ -152,10 +166,15 @@ html, body {
   border-radius: 99px; overflow: hidden;
 }
 .progress-fill {
-  height: 100%; width: 0;
+  /* scaleX et non width : width relance mise en page + peinture, et cette
+     barre bouge toutes les secondes, toute la journee, sur un appareil
+     toujours allume. linear reste juste : mouvement constant. */
+  height: 100%; width: 100%;
   background: var(--accent);
   border-radius: 99px;
-  transition: width 1s linear;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 1s linear;
 }
 .progress-ends {
   width: 100%;
@@ -200,7 +219,7 @@ html, body {
   border-radius: 50%;
   transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
-.bell:active { transform: scale(0.9); }
+.bell:active { transform: scale(0.95); }
 .bell-ico {
   width: 20px; height: 20px;
   background: var(--text-3);
@@ -289,11 +308,16 @@ html, body {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow-x: auto;
+  /* C'est CE conteneur qui défile : le sticky des th devient réel (il était
+     inerte — c'est #views qui défilait). dvh en second : les vieux moteurs
+     ignorent la ligne et gardent le vh. */
+  overflow: auto;
+  max-height: calc(100vh - var(--tabbar-h) - 140px);
+  max-height: calc(100dvh - var(--tabbar-h) - 140px);
 }
 .month-table { width: 100%; border-collapse: collapse; font-size: var(--t-micro); }
 .month-table th {
-  position: sticky; top: 0;
+  position: sticky; top: 0; z-index: 1;
   background: var(--surface-up);
   font-size: var(--t-label); font-weight: 600;
   letter-spacing: 0.1em; text-transform: uppercase;
@@ -332,7 +356,7 @@ html, body {
 /* ---------------------------------------------------------- BARRE D'ONGLETS */
 .tabbar {
   flex: 0 0 auto;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(6, 1fr);
   background: var(--surface);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0);
@@ -352,10 +376,10 @@ html, body {
           mask: center / contain no-repeat;
   transition: transform var(--fast) var(--ease);
 }
-.tab-txt { font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; }
+.tab-txt { font-size: var(--t-label); font-weight: 600; letter-spacing: 0.02em; }
 .tab.is-active { color: var(--accent); }
 .tab.is-active .tab-ico { transform: translateY(-1px) scale(1.06); }
-.tab:active .tab-ico { transform: scale(0.9); }
+.tab:active .tab-ico { transform: scale(0.95); }
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
 /* Icônes en masque SVG : nettes à toute taille, prennent la couleur du texte,
@@ -493,7 +517,11 @@ input[type="text"], input[type="number"], select {
   color: var(--text);
   font-family: inherit; font-size: 16px;   /* 16 px : évite le zoom iOS */
 }
-select { appearance: none; padding-right: var(--s6); }
+select {
+  appearance: none; padding-right: var(--s6);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23848ca4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>');
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+}
 input:focus-visible, select:focus-visible {
   outline: none; border-color: var(--accent); background: var(--surface-up);
 }
@@ -611,7 +639,7 @@ input:focus-visible, select:focus-visible {
   position: fixed;
   left: var(--s3); right: var(--s3);
   top: calc(var(--s3) + env(safe-area-inset-top, 0px));
-  z-index: 20;
+  z-index: 40;  /* au-dessus du dhikr (30) : un rappel invisible ne sert à rien */
   display: flex; align-items: center; gap: var(--s2);
   padding: var(--s3) var(--s3) var(--s3) var(--s4);
   background: var(--accent-soft);
@@ -622,8 +650,19 @@ input:focus-visible, select:focus-visible {
 }
 .reminder.hidden { display: none; }
 
-@keyframes reminder-in { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
-.reminder:not(.hidden) { animation: reminder-in var(--mid) var(--ease) both; }
+/* Entree ET sortie par le haut, en transition : interruptible, et la
+   disparition n est plus une coupure seche. */
+.reminder {
+  transition: transform var(--mid) var(--ease), opacity var(--mid) var(--ease),
+              visibility 0s linear 0s;
+}
+.reminder.hidden {
+  display: flex;                    /* neutralise le .hidden global */
+  transform: translateY(-14px); opacity: 0;
+  visibility: hidden; pointer-events: none;
+  transition: transform var(--mid) var(--ease), opacity var(--mid) var(--ease),
+              visibility 0s linear var(--mid);
+}
 
 .reminder-body { display: flex; align-items: center; gap: var(--s3); flex: 1; min-width: 0; }
 .reminder-ico {
@@ -641,7 +680,7 @@ input:focus-visible, select:focus-visible {
   border-radius: 50%;
   transition: transform var(--fast) var(--ease);
 }
-.reminder-close:active { transform: scale(0.9); }
+.reminder-close:active { transform: scale(0.95); }
 .reminder-close:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* -------------------------------------------------------------- JOURNAL */
@@ -658,7 +697,7 @@ input:focus-visible, select:focus-visible {
 
 /* --------------------------------------------------------------- ALARME */
 #alarm {
-  position: fixed; inset: 0; z-index: 10;
+  position: fixed; inset: 0; z-index: 100;  /* au-dessus de TOUT : c'est lui qui porte Arrêter */
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: var(--s3); padding: var(--s6); text-align: center;
@@ -674,8 +713,17 @@ input:focus-visible, select:focus-visible {
 #alarm-arabic { font-size: clamp(28px, 9vw, 44px); font-weight: 300; direction: rtl; }
 #alarm-time { font-size: 18px; color: var(--text-3); margin-bottom: var(--s5); }
 
-@keyframes alarm-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
-#alarm:not(.hidden) { animation: alarm-in var(--mid) var(--ease) both; }
+/* Fondu d opacite dans les deux sens : la nuit, la fermeture passait d un
+   plein ecran ambre au noir d un coup. Le SON, lui, coupe instantanement
+   (closeAlarm) — seule la lumiere s adoucit. */
+#alarm {
+  transition: opacity var(--mid) var(--ease), visibility 0s linear 0s;
+}
+#alarm.hidden {
+  display: flex;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--mid) var(--ease), visibility 0s linear var(--mid);
+}
 
 /* --------------------------------------------------- GRAND ÉCRAN / TV */
 /* Au-delà d'une tablette, l'app reste une colonne centrée plutôt que de
@@ -692,6 +740,9 @@ input:focus-visible, select:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /* La veilleuse est une opacite pure, non vestibulaire : la couper ferait
+     chuter la luminosite d un coup en pleine nuit — pire que le mouvement. */
+  #app { transition-duration: 1200ms !important; }
 }
 
 /* ---------- Tableau de bord Android (onglet Réglages) -------------------
@@ -714,7 +765,7 @@ input:focus-visible, select:focus-visible {
 .diag li.ko .diag-t { font-weight: 600; }
 .diag-b {
   flex: none; border: 0; cursor: pointer;
-  padding: 7px 12px; border-radius: 8px; font-size: .85rem; font-weight: 600;
+  min-height: 44px; padding: 0 14px; border-radius: var(--radius-sm); font-size: .85rem; font-weight: 600;
   background: var(--accent, #f0b429); color: #1b1b1f;
 }
 
@@ -733,7 +784,7 @@ input:focus-visible, select:focus-visible {
 /* ---------- Bannière de mise à jour ------------------------------------ */
 #maj-banner {
   position: fixed; left: 12px; right: 12px;
-  bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 10px);
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 10px);
   z-index: 60;
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px; border-radius: 14px;
@@ -745,8 +796,8 @@ input:focus-visible, select:focus-visible {
 .maj-txt strong { font-size: .95rem; }
 .maj-txt span { font-size: .8rem; opacity: .8; }
 #maj-banner button {
-  border: 0; cursor: pointer; border-radius: 9px; font-weight: 700;
-  padding: 9px 13px; font-size: .85rem;
+  border: 0; cursor: pointer; border-radius: var(--radius-sm); font-weight: 700;
+  min-height: 44px; padding: 0 14px; font-size: .85rem;
 }
 #maj-later { background: rgba(0,0,0,.12); color: #1b1b1f; }
 #maj-go    { background: #1b1b1f; color: #fff; }
@@ -917,14 +968,14 @@ input:focus-visible, select:focus-visible {
 .coran-player-txt strong { font-size: .92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .coran-player-txt span { flex: none; font-size: .78rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
 #coran-seek {
-  width: 100%; height: 26px; margin: 0; accent-color: var(--accent);
+  width: 100%; height: 44px; margin: 0; accent-color: var(--accent);
   background: transparent;
 }
 .coran-player-btns { display: flex; gap: 8px; }
 .coran-player-btns button {
-  border: 1px solid var(--surface-3, rgba(255,255,255,.12)); cursor: pointer;
-  background: var(--surface-2, rgba(255,255,255,.05)); color: var(--text);
-  border-radius: 10px; padding: 9px 0; font-size: .95rem; font-weight: 600;
+  border: 1px solid var(--surface-3); cursor: pointer;
+  background: var(--surface-2); color: var(--text);
+  border-radius: var(--radius-sm); min-height: 44px; padding: 0; font-size: .95rem; font-weight: 600;
   transition: transform var(--fast) var(--ease);
 }
 .coran-player-btns button:active { transform: scale(0.96); }
@@ -988,7 +1039,6 @@ input:focus-visible, select:focus-visible {
   transition: transform var(--tdev-open) var(--tdev-ease),
               opacity   var(--tdev-open) var(--tdev-ease),
               visibility 0s linear 0s;
-  will-change: transform, opacity;
 }
 #coran-picker.hidden {
   display: flex;                       /* neutralise le .hidden global */
@@ -1026,3 +1076,40 @@ input:focus-visible, select:focus-visible {
   .t-shake { animation: none !important; }
   #coran-liste li.telechargee .coran-dl { animation: none !important; }
 }
+
+
+/* ---------- Focus clavier/D-pad des listes cliquables ------------------- */
+#coran-liste li:focus-visible, #coran-recit-liste li:focus-visible,
+.barre-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#coran-recit-liste li { transition: transform var(--fast) var(--ease); }
+#coran-recit-liste li:active { transform: scale(0.98); }
+
+
+/* ---------- Retours de pression manquants (audit Emil) ------------------ */
+.dhikr-preset, .diag-b, #coran-picker-fermer {
+  transition: transform var(--fast) var(--ease);
+}
+.dhikr-preset:active, .diag-b:active, #coran-picker-fermer:active { transform: scale(0.97); }
+
+
+/* Bannière de mise à jour + lecteur Coran partagent le même coin : quand le
+   lecteur est ouvert, la bannière monte d'un étage au lieu de le recouvrir. */
+#coran-player:not(.hidden) ~ #maj-banner {
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 160px);
+}
+
+/* Le lecteur persiste sur tous les onglets : réserver la place en bas de
+   CHAQUE vue pour que rien ne reste enterré sous lui. */
+#app.avec-lecteur #views { padding-bottom: 150px; }
+
+/* ==================================================================
+   LA règle .hidden globale — EN DERNIER, et ce placement est le correctif :
+   à spécificité égale, la dernière déclaration gagne, et posée en tête de
+   feuille elle perdait contre chaque display:flex de composant. Les surfaces
+   qui transitionnent (#maj-banner, #coran-player, #coran-picker, .reminder,
+   #alarm) la surclassent par SPÉCIFICITÉ, pas par ordre : intactes.
+   ================================================================== */
+.hidden { display: none; }
+/* #barres-liste : son identifiant (display:grid) pèse plus lourd qu une
+   classe — il lui faut sa règle dédiée. */
+#barres-liste.hidden { display: none; }
