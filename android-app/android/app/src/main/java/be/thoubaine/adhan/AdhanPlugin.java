@@ -323,6 +323,24 @@ public class AdhanPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Position/durée/état de la lecture en cours sur la barre. */
+    @PluginMethod
+    public void coranCastEtat(PluginCall call) {
+        try {
+            call.resolve(JSObject.fromJSONObject(CastSender.coranEtat()));
+        } catch (Exception e) {
+            call.resolve(new JSObject().put("actif", false));
+        }
+    }
+
+    /** Volume de la barre — geste explicite de l'utilisateur. */
+    @PluginMethod
+    public void coranCastVolume(PluginCall call) {
+        final Double niveau = call.getDouble("niveau", -1d);
+        if (niveau != null && niveau >= 0) CastSender.coranVolume(niveau);
+        call.resolve();
+    }
+
     // -----------------------------------------------------------------
     // Permissions
     // -----------------------------------------------------------------

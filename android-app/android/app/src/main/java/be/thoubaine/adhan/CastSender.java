@@ -84,6 +84,45 @@ final class CastSender {
         if (s != null) s.arretDemande = true;
     }
 
+    /** Position/duree/etat de la lecture Coran sur la barre — rafraichis par
+     *  la surveillance (GET_STATUS periodique). La tablette n'a AUCUNE
+     *  horloge locale quand la barre joue : c'est ici la seule verite. */
+    private volatile double positionSec = 0;
+    private volatile double dureeSec = 0;
+    private volatile String etatLecture = "";
+
+    static org.json.JSONObject coranEtat() {
+        final org.json.JSONObject r = new org.json.JSONObject();
+        final CastSender s = coranActif;
+        try {
+            r.put("actif", s != null);
+            if (s != null) {
+                r.put("position", s.positionSec);
+                r.put("duree", s.dureeSec);
+                r.put("lecture", s.etatLecture);
+            }
+        } catch (Exception ignored) {}
+        return r;
+    }
+
+    /**
+     * Volume de la barre, sur GESTE EXPLICITE de l'utilisateur (curseur).
+     * ⚠️ Distinct du plancher automatique : la doctrine « ne jamais baisser »
+     * vaut pour les automatismes — un doigt sur un curseur est un ordre.
+     */
+    static void coranVolume(double niveau) {
+        final CastSender s = coranActif;
+        if (s == null) return;
+        final double v = Math.max(0, Math.min(1, niveau));
+        try {
+            s.envoyer(RECEPTEUR, CastProto.NS_RECEPTEUR,
+                "{\"type\":\"SET_VOLUME\",\"volume\":{\"level\":" + v
+                + ",\"muted\":false},\"requestId\":" + (s.requete++) + "}");
+        } catch (Exception e) {
+            Log.w(TAG, "volume barre : " + e.getMessage());
+        }
+    }
+
     // -----------------------------------------------------------------
     // Point d'entree
     // -----------------------------------------------------------------
@@ -453,7 +492,15 @@ final class CastSender {
                 }
                 if (System.currentTimeMillis() >= prochainPing) {
                     envoyer(RECEPTEUR, CastProto.NS_BATTEMENT, "{\"type\":\"PING\"}");
-                    prochainPing = System.currentTimeMillis() + 4000;
+                    // La barre ne pousse un MEDIA_STATUS qu'aux CHANGEMENTS
+                    // d'etat — jamais en continu. Pour suivre la position, il
+                    // faut la demander : c'etait le temps fige a 0:02.
+                    if (mediaSession >= 0 && transportActif != null) {
+                        envoyer(transportActif, CastProto.NS_MEDIA,
+                            "{\"type\":\"GET_STATUS\",\"mediaSessionId\":" + mediaSession
+                            + ",\"requestId\":" + (requete++) + "}");
+                    }
+                    prochainPing = System.currentTimeMillis() + 3000;
                 }
                 final CastProto.Message m = attendre(1500);
                 if (m == null) continue;
@@ -466,8 +513,13 @@ final class CastSender {
                 if (!"MEDIA_STATUS".equals(j.optString("type"))) continue;
                 final JSONArray st = j.optJSONArray("status");
                 final JSONObject s0 = (st == null || st.length() == 0) ? null : st.optJSONObject(0);
-                if (s0 != null && "IDLE".equals(s0.optString("playerState", ""))
-                        && s0.optString("idleReason", "").length() > 0) {
+                if (s0 == null) continue;
+                if (s0.has("currentTime")) positionSec = s0.optDouble("currentTime", positionSec);
+                final JSONObject med = s0.optJSONObject("media");
+                if (med != null && med.has("duration")) dureeSec = med.optDouble("duration", dureeSec);
+                final String el = s0.optString("playerState", "");
+                if (el.length() > 0) etatLecture = el;
+                if ("IDLE".equals(el) && s0.optString("idleReason", "").length() > 0) {
                     Log.i(TAG, "coran termine (" + s0.optString("idleReason") + ")");
                     break;
                 }

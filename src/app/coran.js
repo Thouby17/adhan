@@ -518,6 +518,7 @@
     // (texte ou cache) redémarrait l'audio APRÈS l'arrêt — lecture fantôme,
     // lecteur caché, impossible à stopper sans recharger.
     etat.seq++;
+    arreterSuiviBarre();
     var audio = $("coran-audio");
     try { audio.pause(); audio.currentTime = 0; } catch (e) {}
     audio.removeAttribute("src"); audio.load();
@@ -541,6 +542,37 @@
   }
 
   // ---------- Barre de son -------------------------------------------------
+  // Quand la barre joue, la tablette n'a AUCUNE horloge locale : sans ce
+  // suivi, le temps restait figé (constat terrain : bloqué à 0:02 pendant
+  // que la récitation continuait).
+  var suiviBarre = null;
+  function demarrerSuiviBarre() {
+    arreterSuiviBarre();
+    if (!natif()) return;
+    suiviBarre = setInterval(function () {
+      if (!etat.surBarre) { arreterSuiviBarre(); return; }
+      root.AdhanNative.coranCastEtat().then(function (r) {
+        if (!etat.surBarre) return;
+        if (!r || !r.actif) {
+          // La barre a fini (ou la session est morte) : on referme le
+          // lecteur proprement au lieu de rester « Sur la barre » à vie.
+          arreter();
+          return;
+        }
+        var tEl = $("coran-temps");
+        if (tEl && typeof r.position === "number") {
+          tEl.textContent = fmt(r.position) + " / " + fmt(r.duree || NaN);
+        }
+        var seek = $("coran-seek");
+        if (seek && r.duree > 0) {
+          seek.value = String(Math.round(r.position * 1000 / r.duree));
+        }
+      }).catch(function () {});
+    }, 2000);
+  }
+  function arreterSuiviBarre() {
+    if (suiviBarre) { clearInterval(suiviBarre); suiviBarre = null; }
+  }
   function versLaBarre() {
     if (!natif()) { majTitre("La barre n'est joignable que depuis l'application Android."); return; }
     if (etat.enLecture == null) return;
@@ -567,6 +599,7 @@
         if (r && r.ok) {
           majTitre("Sur la barre : " + SOURATES[n - 1][0]);
           if (root.toast) root.toast("Envoyé à la barre de son");
+          demarrerSuiviBarre();
         }
         else {
           etat.surBarre = false;
@@ -639,7 +672,16 @@
     // Le clic passe par basculerTexte(), qui affiche pourquoi.
     if (bt) { bt.classList.toggle("actif", etat.texte); }
     var vr = $("coran-vol-row");
-    if (vr) vr.classList.toggle("hidden", etat.surBarre);
+    if (vr) {
+      vr.classList.remove("hidden");
+      var vc = $("coran-vol");
+      if (vc) {
+        vc.setAttribute("aria-label",
+          etat.surBarre ? "Volume de la barre de son" : "Volume de la tablette");
+        // En revenant à la tablette, le curseur reprend le réglage local.
+        if (!etat.surBarre) vc.value = String(Math.round(etat.volume * 100));
+      }
+    }
   }
 
   function majListe() {
@@ -783,7 +825,15 @@
     })();
     $("coran-vol").value = String(Math.round(etat.volume * 100));
     $("coran-vol").addEventListener("input", function () {
-      etat.volume = Number(this.value) / 100;
+      var v = Number(this.value) / 100;
+      if (etat.surBarre) {
+        // Geste EXPLICITE : le curseur commande la barre elle-même (constat
+        // terrain : « j'ai baissé, la barre n'a pas bougé »). On ne touche
+        // pas au réglage local mémorisé — chaque sortie garde le sien.
+        if (natif()) root.AdhanNative.coranCastVolume(v).catch(function () {});
+        return;
+      }
+      etat.volume = v;
       audio.volume = etat.volume;
       ecrireJson(CLE_VOLUME, etat.volume);
     });
@@ -815,6 +865,7 @@
         // Revenir sur la tablette : on coupe la barre et on reprend ici.
         if (natif()) root.AdhanNative.coranCastArreter().catch(function () {});
         etat.surBarre = false;
+        arreterSuiviBarre();
         majLecteur();
         if (etat.enLecture != null) jouer(etat.enLecture);
       } else {
@@ -861,6 +912,7 @@
       // qui se résolvait après cette pause relançait la récitation
       // par-dessus l'adhan — la superposition exacte qu'on élimine.
       etat.seq++;
+      arreterSuiviBarre();
       var a = $("coran-audio");
       try { if (a && !a.paused) a.pause(); } catch (e) {}
       if (etat.surBarre && natif()) {

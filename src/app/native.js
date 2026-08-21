@@ -121,6 +121,8 @@
     installerMiseAJour: function (url) { return appel("installerMiseAJour", { url: url }); },
     coranCast: function (url, titre) { return appel("coranCast", { url: url, titre: titre || "" }); },
     coranCastArreter: function () { return appel("coranCastArreter"); },
+    coranCastEtat: function () { return appel("coranCastEtat"); },
+    coranCastVolume: function (v) { return appel("coranCastVolume", { niveau: v }); },
     ecouter: ecouter
   };
 })(typeof self !== "undefined" ? self : this);
