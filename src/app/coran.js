@@ -65,6 +65,29 @@
   var CLE_CHOIX = "adhan.coran.choix.v1";
   var CLE_POSITION = "adhan.coran.position.v1";
   var CACHE_AUDIO = "coran-audio-v1";
+  var CLE_TEXTES = "adhan.coran.texte.v1";
+  var CLE_VOLUME = "adhan.coran.volume.v1";
+  var QC_API = "https://api.quran.com/api/v4";
+  var QC_AUDIO = "https://verses.quran.com/";
+
+  // Correspondance MP3Quran -> récitation Quran.com (fichiers PAR VERSET,
+  // donc suivi du texte exact par construction). ⚠️ L'ORDRE COMPTE : les
+  // codes mujawwad doivent précéder leur préfixe murattal, sinon
+  // « basit_mjwd » matcherait « basit » et jouerait le MAUVAIS enregistrement.
+  // Récitateurs absents de la liste : texte affiché SANS suivi — honnête,
+  // plutôt qu'un surlignage faux.
+  var QC_MAP = [
+    ["/basit_mjwd/", 1], ["/basit/", 2],
+    ["/minsh_mjwd/", 8], ["/minsh/", 9],
+    ["/afs/", 7], ["/sds/", 3], ["/husr/", 6],
+    ["/shur/", 10], ["/tblawi/", 11], ["/shatri/", 4], ["/hani/", 5]
+  ];
+  function recitationQC() {
+    for (var i = 0; i < QC_MAP.length; i++) {
+      if (etat.choix.serveur.indexOf(QC_MAP[i][0]) !== -1) return QC_MAP[i][1];
+    }
+    return null;
+  }
   var SEPT_JOURS = 7 * 24 * 3600 * 1000;
 
   // Récitateur par défaut, VÉRIFIÉ à la main (serveur testé en 200) : l'onglet
@@ -84,7 +107,12 @@
     surBarre: false,
     blobUrl: null,         // à révoquer avant d'en créer un autre
     seq: 0,                // jeton de génération : deux touchers rapides, seul le dernier gagne
-    dlCtrl: null           // téléchargement d'arrière-plan en cours, pour l'annuler
+    dlCtrl: null,          // téléchargement d'arrière-plan en cours, pour l'annuler
+    texte: false,          // mode « Suivre le texte » (verset par verset)
+    versets: null,         // [{ key, txt }] de la sourate affichée
+    versetIdx: -1,         // verset en cours (mode texte)
+    versetUrls: null,      // audio par verset (Quran.com), si récitateur couvert
+    volume: 1              // volume local de la tablette, persisté
   };
 
   function $(id) { return document.getElementById(id); }
@@ -146,6 +174,38 @@
       });
   }
 
+  // ---------- Texte arabe (Uthmani) + audio par verset ----------------------
+  function chargerTexte(n) {
+    var stock = lireJson(CLE_TEXTES) || { ordre: [], par: {} };
+    if (stock.par[n]) return Promise.resolve(stock.par[n]);
+    return fetch(QC_API + "/quran/verses/uthmani?chapter_number=" + n)
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var v = (j.verses || []).map(function (x) {
+          return { key: x.verse_key, txt: x.text_uthmani };
+        });
+        if (!v.length) throw new Error("sourate vide");
+        // Cache LRU : 12 sourates maximum — tout le Coran en localStorage
+        // pèserait ~1 Mo pour rien.
+        stock.par[n] = v;
+        stock.ordre = stock.ordre.filter(function (x) { return x !== n; });
+        stock.ordre.push(n);
+        while (stock.ordre.length > 12) delete stock.par[stock.ordre.shift()];
+        ecrireJson(CLE_TEXTES, stock);
+        return v;
+      });
+  }
+
+  function chargerVersetsAudio(n, rec) {
+    return fetch(QC_API + "/recitations/" + rec + "/by_chapter/" + n)
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var l = (j.audio_files || []).map(function (a) { return QC_AUDIO + a.url; });
+        if (!l.length) throw new Error("aucun audio par verset");
+        return l;
+      });
+  }
+
   // ---------- Cache audio (réécoute hors ligne) ----------------------------
   function ouvrirCache() {
     if (!root.caches) return Promise.resolve(null);
@@ -194,6 +254,7 @@
 
     var demarrer = function (src) {
       if (jeton !== etat.seq) return;   // un toucher plus récent a gagné
+      audio.volume = etat.volume;
       if (etat.blobUrl) { try { URL.revokeObjectURL(etat.blobUrl); } catch (e) {} etat.blobUrl = null; }
       audio.src = src;
       // Reprise : si on rouvre LA sourate interrompue, on repart où on était.
@@ -206,6 +267,9 @@
         majTitre("Lecture impossible : " + e.message);
       });
     };
+
+    // Mode « Suivre le texte » : la lecture passe verset par verset.
+    if (etat.texte) { jouerEnModeTexte(n, jeton); return; }
 
     // En cache -> hors ligne ; sinon flux direct + copie en arrière-plan.
     ouvrirCache().then(function (c) {
@@ -226,6 +290,133 @@
     majLecteur();
   }
 
+  // ---------- Lecture verset par verset (mode texte) ------------------------
+  function jouerEnModeTexte(n, jeton) {
+    var rec = recitationQC();
+    Promise.all([
+      chargerTexte(n),
+      rec ? chargerVersetsAudio(n, rec) : Promise.resolve(null)
+    ]).then(function (res) {
+      if (jeton !== etat.seq) return;
+      etat.versets = res[0];
+      etat.versetUrls = res[1];
+      renderTexte(n);
+      if (etat.versetUrls) {
+        jouerVerset(0, jeton);
+      } else {
+        // Récitateur non couvert par Quran.com : le texte s'affiche, l'audio
+        // reste le fichier complet MP3Quran — sans surlignage, et on le DIT.
+        majNoteTexte("Texte affiché — le suivi verset par verset n'existe pas "
+          + "pour ce récitateur. Récitation en continu.");
+        var audio = $("coran-audio");
+        audio.volume = etat.volume;
+        audio.src = urlSourate(n);
+        var p = audio.play();
+        if (p && p.catch) p.catch(function () {});
+      }
+      majLecteur();
+    }).catch(function (e) {
+      if (jeton !== etat.seq) return;
+      majNoteTexte("Texte indisponible (" + e.message + ") — vérifier la connexion.");
+    });
+  }
+
+  function jouerVerset(i, jeton) {
+    if (jeton !== etat.seq) return;
+    if (!etat.versetUrls || i < 0) i = 0;
+    if (i >= etat.versetUrls.length) { finDeSourate(); return; }
+    etat.versetIdx = i;
+    var audio = $("coran-audio");
+    audio.volume = etat.volume;
+    audio.src = etat.versetUrls[i];
+    var p = audio.play();
+    if (p && p.catch) p.catch(function () {});
+    surlignerVerset(i);
+    ecrireJson(CLE_POSITION, { url: urlSourate(etat.enLecture), verset: i });
+  }
+
+  function finDeSourate() {
+    // Même règle qu'en mode continu : on enchaîne sur la sourate suivante.
+    var dispo = souratesDisponibles();
+    var n = etat.enLecture;
+    for (var s = n + 1; s <= 114; s++) {
+      if (!dispo || dispo[s]) { jouer(s); return; }
+    }
+    arreter();
+  }
+
+  function surlignerVerset(i) {
+    var corps = $("coran-texte-corps");
+    if (!corps) return;
+    var actifs = corps.querySelectorAll(".verset.actif");
+    for (var a = 0; a < actifs.length; a++) actifs[a].classList.remove("actif");
+    var el2 = corps.querySelector('.verset[data-i="' + i + '"]');
+    if (el2) {
+      el2.classList.add("actif");
+      // Défilement doux vers le verset — sauf si l'utilisateur a demandé
+      // moins de mouvement.
+      var doux = !(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      try { el2.scrollIntoView({ block: "center", behavior: doux ? "smooth" : "auto" }); } catch (e) {}
+    }
+  }
+
+  function majNoteTexte(txt) {
+    var n2 = $("coran-texte-note");
+    if (n2) n2.textContent = txt || "";
+  }
+
+  function renderTexte(n) {
+    var corps = $("coran-texte-corps");
+    var nom = $("coran-texte-nom");
+    if (!corps) return;
+    if (nom) nom.textContent = n + ". " + SOURATES[n - 1][0] + " · " + SOURATES[n - 1][1];
+    majNoteTexte(etat.versetUrls ? "" : "");
+    corps.textContent = "";
+    if (!etat.versets) {
+      var att = document.createElement("span");
+      att.className = "vide";
+      att.textContent = "Chargement du texte…";
+      corps.appendChild(att);
+      return;
+    }
+    etat.versets.forEach(function (v, i) {
+      var sp = document.createElement("span");
+      sp.className = "verset";
+      sp.dataset.i = String(i);
+      sp.appendChild(document.createTextNode(v.txt));
+      var num = document.createElement("span");
+      num.className = "verset-num";
+      num.textContent = v.key.split(":")[1];
+      sp.appendChild(num);
+      sp.addEventListener("click", function () {
+        // Toucher un verset = y aller — seulement si l'audio par verset existe.
+        if (etat.texte && etat.versetUrls) jouerVerset(i, etat.seq);
+      });
+      corps.appendChild(sp);
+      corps.appendChild(document.createTextNode(" "));
+    });
+  }
+
+  function basculerTexte() {
+    if (etat.enLecture == null) return;
+    if (etat.surBarre) {
+      majTitre("Le suivi du texte se fait sur la tablette — reviens d'abord de la barre.");
+      return;
+    }
+    etat.texte = !etat.texte;
+    var panneau = $("coran-texte");
+    if (etat.texte) {
+      panneau.classList.remove("hidden");
+      jouer(etat.enLecture);        // repart en mode verset (ou continu + texte)
+    } else {
+      panneau.classList.add("hidden");
+      etat.versetIdx = -1;
+      etat.versetUrls = null;
+      jouer(etat.enLecture);        // reprend le fichier complet MP3Quran
+    }
+    majLecteur();
+  }
+
   function pauseOuReprise() {
     var audio = $("coran-audio");
     if (audio.paused) { var p = audio.play(); if (p && p.catch) p.catch(function () {}); }
@@ -243,6 +434,13 @@
     if (etat.surBarre && natif()) root.AdhanNative.coranCastArreter().catch(function () {});
     etat.enLecture = null;
     etat.surBarre = false;
+    etat.texte = false;
+    etat.versetIdx = -1;
+    etat.versetUrls = null;
+    var panneau = $("coran-texte");
+    if (panneau) panneau.classList.add("hidden");
+    var bt = $("coran-texte-btn");
+    if (bt) bt.classList.remove("actif");
     ecrireJson(CLE_POSITION, null);
     majListe();
     majLecteur();
@@ -252,6 +450,13 @@
   function versLaBarre() {
     if (!natif()) { majTitre("La barre n'est joignable que depuis l'application Android."); return; }
     if (etat.enLecture == null) return;
+    // La barre lit le fichier complet MP3Quran : on quitte le mode texte.
+    if (etat.texte) {
+      etat.texte = false;
+      etat.versetIdx = -1; etat.versetUrls = null;
+      var panneau = $("coran-texte");
+      if (panneau) panneau.classList.add("hidden");
+    }
     var n = etat.enLecture;
     var audio = $("coran-audio");
     audio.pause();
@@ -320,8 +525,14 @@
     var audio = $("coran-audio");
     $("coran-play").textContent = (etat.surBarre || audio.paused) ? "▶" : "⏸";
     $("coran-play").disabled = etat.surBarre;
-    $("coran-seek").disabled = etat.surBarre;
+    $("coran-seek").disabled = etat.surBarre || etat.texte;
     $("coran-barre-btn").classList.toggle("actif", etat.surBarre);
+    $("coran-rew").disabled = etat.surBarre;
+    $("coran-fwd").disabled = etat.surBarre;
+    var bt = $("coran-texte-btn");
+    if (bt) { bt.classList.toggle("actif", etat.texte); bt.disabled = etat.surBarre; }
+    var vr = $("coran-vol-row");
+    if (vr) vr.classList.toggle("hidden", etat.surBarre);
   }
 
   function majListe() {
@@ -423,6 +634,11 @@
     audio.addEventListener("play", majLecteur);
     audio.addEventListener("pause", majLecteur);
     audio.addEventListener("ended", function () {
+      // Mode texte : le verset suivant, pas la sourate suivante.
+      if (etat.texte && etat.versetUrls) {
+        jouerVerset(etat.versetIdx + 1, etat.seq);
+        return;
+      }
       ecrireJson(CLE_POSITION, null);
       // Enchaîner : c'est le mode d'écoute naturel d'une lecture continue.
       var dispo = souratesDisponibles();
@@ -436,6 +652,37 @@
       if (etat.enLecture != null && !etat.surBarre) {
         majTitre("Lecture interrompue — vérifier la connexion.");
       }
+    });
+
+    etat.volume = (function () {
+      var v = lireJson(CLE_VOLUME);
+      return (typeof v === "number" && v >= 0 && v <= 1) ? v : 1;
+    })();
+    $("coran-vol").value = String(Math.round(etat.volume * 100));
+    $("coran-vol").addEventListener("input", function () {
+      etat.volume = Number(this.value) / 100;
+      audio.volume = etat.volume;
+      ecrireJson(CLE_VOLUME, etat.volume);
+    });
+
+    // ±10 s en continu ; verset précédent/suivant en mode texte.
+    $("coran-rew").addEventListener("click", function () {
+      if (etat.texte && etat.versetUrls) { jouerVerset(etat.versetIdx - 1, etat.seq); return; }
+      try { audio.currentTime = Math.max(0, audio.currentTime - 10); } catch (e) {}
+    });
+    $("coran-fwd").addEventListener("click", function () {
+      if (etat.texte && etat.versetUrls) { jouerVerset(etat.versetIdx + 1, etat.seq); return; }
+      try {
+        if (isFinite(audio.duration)) {
+          audio.currentTime = Math.min(audio.duration - 0.5, audio.currentTime + 10);
+        }
+      } catch (e) {}
+    });
+
+    $("coran-texte-btn").addEventListener("click", basculerTexte);
+    $("coran-texte-fermer").addEventListener("click", function () {
+      if (etat.texte) basculerTexte();
+      else $("coran-texte").classList.add("hidden");
     });
 
     $("coran-play").addEventListener("click", pauseOuReprise);

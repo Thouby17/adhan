@@ -381,9 +381,19 @@
       <input type="range" id="coran-seek" min="0" max="1000" value="0"
              aria-label="Position de lecture">
       <div class="coran-player-btns">
+        <button type="button" id="coran-rew" aria-label="Reculer de 10 secondes">−10 s</button>
         <button type="button" id="coran-play" aria-label="Lecture ou pause">▶</button>
+        <button type="button" id="coran-fwd" aria-label="Avancer de 10 secondes">+10 s</button>
+      </div>
+      <div class="coran-player-btns coran-player-actions">
+        <button type="button" id="coran-texte-btn">Texte</button>
         <button type="button" id="coran-barre-btn">Sur la barre</button>
         <button type="button" id="coran-stop" aria-label="Arrêter">■</button>
+      </div>
+      <div class="coran-vol-row" id="coran-vol-row">
+        <span class="coran-vol-ico" aria-hidden="true">🔉</span>
+        <input type="range" id="coran-vol" min="0" max="100" value="100"
+               aria-label="Volume de la tablette">
       </div>
     </div>
 
@@ -398,6 +408,20 @@
     </div>
 
     <audio id="coran-audio" preload="none"></audio>
+
+    <!-- Panneau « Suivre le texte » : le Coran en arabe, verset par verset.
+         z-index 54 : le LECTEUR (55) reste posé par-dessus — les commandes
+         ne disparaissent jamais derrière le texte. -->
+    <div id="coran-texte" class="hidden" role="region" aria-label="Texte de la sourate">
+      <header class="coran-texte-tete">
+        <div class="coran-texte-titres">
+          <strong id="coran-texte-nom"></strong>
+          <span id="coran-texte-note"></span>
+        </div>
+        <button type="button" id="coran-texte-fermer">Fermer</button>
+      </header>
+      <div id="coran-texte-corps" dir="rtl" lang="ar"></div>
+    </div>
 
     <!-- Toast : confirmation transitoire (recette transitions.dev n°22).
          Toujours dans le DOM, invisible replié — pas de .hidden ici, c est
